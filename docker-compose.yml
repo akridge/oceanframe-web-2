@@ -1,0 +1,295 @@
+# OceanFrame — local stack.
+#
+#   docker compose up -d --build            the app and Oracle Free, core image (~400 MB)
+#   docker compose --profile ml up -d       adds the CLIP + YOLO + SAM 3 app on 8081
+#   docker compose --profile dev up         live-reload against your working tree
+#   docker compose --profile test run --rm test         offline suite
+#   docker compose --profile live run --rm test-live    suite against gs://nmfs_odp_pifsc
+#   docker compose --profile quickstart run --rm quickstart   build a real NOAA catalog
+#
+# Everything except `app` and its Oracle sits behind a profile, so a plain `up`
+# starts those two and nothing else. Copy .env.example to .env to change ports, the
+# default source, or the model.
+
+x-common-env: &common-env
+  APP_HOST: 0.0.0.0
+  APP_PORT: 8080
+  OPEN_BROWSER: "0"
+  PYTHONUNBUFFERED: "1"
+
+  # ── Image library ────────────────────────────────────────────────────────
+  LIB_DATA_DIR: /data/library
+  LIB_MODEL_DIR: /models
+  # Bucket or directory offered by default in the UI, e.g.
+  #   gs://nmfs_odp_pifsc/PIFSC/ESD/ARP/pifsc-ai-data-repository
+  # Pre-fills the "New collection" box. NOAA's PIFSC open data is public, so
+  # this works out of the box with no credentials.
+  LIB_SOURCE: "${LIB_SOURCE:-gs://nmfs_odp_pifsc/PIFSC/ESD/ARP/pifsc-ai-data-repository}"
+  # auto = CLIP when installed, else the dependency-free hash descriptor.
+  LIB_EMBED_BACKEND: "${LIB_EMBED_BACKEND:-auto}"
+  # auto = use ADC when present, else an anonymous client — which is what makes
+  # NOAA's public buckets work with no credentials at all.
+  LIB_GCS_ANONYMOUS: "${LIB_GCS_ANONYMOUS:-auto}"
+  # A local path or a gs:// URI. gs:// weights are cached into LIB_MODEL_DIR.
+  LIB_YOLO_MODEL: "${LIB_YOLO_MODEL:-yolo11n.pt}"
+  LIB_SAM3_MODEL: "${LIB_SAM3_MODEL:-/models/sam3.pt}"
+  LIB_PATH_TAG_PATTERN: "${LIB_PATH_TAG_PATTERN:-}"
+  LIB_CRAWL_WORKERS: "${LIB_CRAWL_WORKERS:-8}"
+
+# The application database: users, sign-in and curation live in Oracle Free,
+# the same as the multi-user stack. The library's derived catalog stays in
+# SQLite on the library volume.
+x-db-env: &db-env
+  OCEANFRAME_DB_USER: "${APP_SCHEMA_NAME:-oceanframe}"
+  OCEANFRAME_DB_PASSWORD: "${APP_SCHEMA_PASSWORD:-}"
+  OCEANFRAME_DB_DSN: "oceanframe-oracle:1521/${DB_SERVICE_NAME:-FREEPDB1}"
+  OCEANFRAME_REQUIRE_ORACLE: "on"
+
+  # Sign-in is off unless .env turns it on; the admin is seeded at start-up.
+  OCEANFRAME_AUTH: "${OCEANFRAME_AUTH:-off}"
+  OCEANFRAME_ADMIN_USERNAME: "${OCEANFRAME_ADMIN_USERNAME:-}"
+  OCEANFRAME_ADMIN_EMAIL: "${OCEANFRAME_ADMIN_EMAIL:-}"
+  OCEANFRAME_ADMIN_PASSWORD: "${OCEANFRAME_ADMIN_PASSWORD:-}"
+  OCEANFRAME_ALLOW_SIGNUP: "${OCEANFRAME_ALLOW_SIGNUP:-on}"
+  OCEANFRAME_SIGNUP_ROLE: "${OCEANFRAME_SIGNUP_ROLE:-curator}"
+
+# Curation, the Hugging Face registry and evaluation staging: the same
+# pass-throughs as the stack's x-app-env (blank = the built-in default). Only the
+# app services get them, never the test runners.
+x-curation-env: &curation-env
+  CURATION_EVAL_DIR: /data/library/curation_eval
+  CURATION_IMAGE_BUCKETS: "${CURATION_IMAGE_BUCKETS:-}"
+  CURATION_CREATE_ROLE: "${CURATION_CREATE_ROLE:-curator}"
+  CURATION_ALLOW_LOCAL_SOURCES: "${CURATION_ALLOW_LOCAL_SOURCES:-}"
+  CURATION_SEED: "${CURATION_SEED:-}"
+  CURATION_STARTER_DATA: "${CURATION_STARTER_DATA:-noaa-t3}"
+  CURATION_VERSIONS_DIR: /data/library/curation_versions
+  CURATION_PUBLISH_URI: "${CURATION_PUBLISH_URI:-}"
+  CURATION_SPLIT_RATIOS: "${CURATION_SPLIT_RATIOS:-0.8,0.1,0.1}"
+  CURATION_SPLIT_SEED: "${CURATION_SPLIT_SEED:-42}"
+  CURATION_HF_ALLOWED_ORGS: "${CURATION_HF_ALLOWED_ORGS:-}"
+  CURATION_HF_ENDPOINT: "${CURATION_HF_ENDPOINT:-https://huggingface.co}"
+  CURATION_HUB_CACHE: "${CURATION_HUB_CACHE:-/data/library/curation_eval/hub}"
+  CURATION_HUB_MAX_BYTES: "${CURATION_HUB_MAX_BYTES:-}"
+  CURATION_EVAL_FETCH_WORKERS: "${CURATION_EVAL_FETCH_WORKERS:-}"
+  CURATION_EVAL_MAX_MISSING: "${CURATION_EVAL_MAX_MISSING:-}"
+  CURATION_PATCH_CACHE: "${CURATION_PATCH_CACHE:-}"
+  # Model validation and evaluation also need the isolated worker, which runs
+  # only in the stack (docker-compose.stack.yml).
+  CURATION_TRUSTED_CHECKPOINTS: "${CURATION_TRUSTED_CHECKPOINTS:-off}"
+  CURATION_MODEL_MAX_BYTES: "${CURATION_MODEL_MAX_BYTES:-1073741824}"
+
+x-db-wait: &db-wait
+  depends_on:
+    oceanframe-oracle:
+      condition: service_healthy
+  command: ["bash", "/app/docker-entrypoint.sh"]
+
+x-build: &build
+  context: .
+  args:
+    # Match the host user so a bind-mounted ./models stays writable and the
+    # files it creates are not owned by root.
+    UID: "${UID:-1000}"
+    GID: "${GID:-1000}"
+    # Swap in an internal mirror or a hardened base without editing files.
+    BASE_IMAGE: "${BASE_IMAGE:-python:3.12-slim}"
+
+services:
+
+  # ── Oracle Free (the application database) ─────────────────────────────
+  oceanframe-oracle:
+    container_name: oceanframe-oracle
+    image: "gvenzl/oracle-free:${ORACLE_IMAGE_TAG:-23-slim}"
+    restart: unless-stopped
+    environment:
+      ORACLE_PASSWORD: "${ORACLE_PASSWORD:-}"
+      APP_USER: "${APP_SCHEMA_NAME:-oceanframe}"
+      APP_USER_PASSWORD: "${APP_SCHEMA_PASSWORD:-}"
+    ports:
+      - "127.0.0.1:${ORACLE_HOST_PORT:-1522}:1521"
+    volumes:
+      - "${OCEANFRAME_ORACLE_DATA:-oceanframe-oracle-data}:/opt/oracle/oradata"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 100
+      start_period: 60s
+
+  # ── The app ───────────────────────────────────────────────────────────────
+  app:
+    build: { <<: *build, target: runtime }
+    image: oceanframe:core
+    container_name: oceanframe
+    # PID 1 reaping, so Ctrl-C and `docker stop` are immediate.
+    init: true
+    ports:
+      # Loopback by default: set OCEANFRAME_BIND=0.0.0.0 (with OCEANFRAME_AUTH=on) for the LAN.
+      - "${OCEANFRAME_BIND:-127.0.0.1}:${PORT:-8080}:8080"
+    environment:
+      <<: [*common-env, *db-env, *curation-env]
+    <<: *db-wait
+    volumes:
+      - uploads:/app/uploads
+      - library:/data/library
+      - ./models:/models
+    restart: unless-stopped
+
+  # ── The app, with the model stack ─────────────────────────────────────────
+  # Shares the same volumes, so a catalog built by `app` is picked up here and
+  # you can re-embed it with CLIP without re-crawling.
+  #
+  # On its own port, so `--profile ml up` brings both up rather than failing on
+  # a port clash — handy for comparing hash-descriptor and CLIP results against
+  # one catalog. Set ML_PORT=$PORT and start only this one to replace `app`.
+  app-ml:
+    profiles: ["ml"]
+    build: { <<: *build, target: ml }
+    image: oceanframe:ml
+    container_name: oceanframe-ml
+    init: true
+    ports:
+      - "${OCEANFRAME_BIND:-127.0.0.1}:${ML_PORT:-8081}:8080"
+    environment:
+      <<: [*common-env, *db-env, *curation-env]
+    <<: *db-wait
+    volumes:
+      - uploads:/app/uploads
+      - library:/data/library
+      - ./models:/models
+    restart: unless-stopped
+
+  # ── The app, on an NVIDIA GPU ─────────────────────────────────────────────
+  # Same `ml` target, but with the CUDA torch wheels instead of the CPU ones,
+  # and the GPU reserved for the container.  SAM 3 in particular is the
+  # difference between tens of seconds per image and a fraction of one.
+  #
+  # Needs the NVIDIA Container Toolkit (Docker Desktop on Windows gets this
+  # from the WSL2 driver).  Check with:
+  #     docker run --rm --gpus all oceanframe:gpu nvidia-smi
+  app-gpu:
+    profiles: ["gpu"]
+    build:
+      <<: *build
+      target: ml
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+        BASE_IMAGE: "${BASE_IMAGE:-python:3.12-slim}"
+        # Empty = PyPI's default torch, which is the CUDA build. The CPU index
+        # is only the default because most people do not have a GPU.
+        TORCH_INDEX: ""
+    image: oceanframe:gpu
+    container_name: oceanframe-gpu
+    init: true
+    ports:
+      - "${OCEANFRAME_BIND:-127.0.0.1}:${GPU_PORT:-8080}:8080"
+    environment:
+      <<: [*common-env, *db-env, *curation-env]
+      # Ultralytics and torch both read this; "0" is the first visible GPU.
+      CUDA_VISIBLE_DEVICES: "${CUDA_VISIBLE_DEVICES:-0}"
+    volumes:
+      - uploads:/app/uploads
+      - library:/data/library
+      - ./models:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    <<: *db-wait
+
+  # ── Live-reload development ───────────────────────────────────────────────
+  # The working tree is mounted over /app, so edits to Python, templates, CSS
+  # and JS take effect without a rebuild.
+  dev:
+    profiles: ["dev"]
+    build: { <<: *build, target: runtime }
+    image: oceanframe:core
+    container_name: oceanframe-dev
+    # Waits for Oracle but keeps the reload command below, not the entrypoint.
+    depends_on:
+      oceanframe-oracle:
+        condition: service_healthy
+    init: true
+    # Watch /app as a whole: naming individual --reload-dir entries silently
+    # excludes everything else, which meant edits to main.py, templates/ and
+    # static/ were ignored. The excludes keep watchfiles out of the heavy
+    # directories a working tree accumulates.
+    command: >-
+      uvicorn main:app --host 0.0.0.0 --port 8080 --reload --reload-dir /app
+      --reload-include '*.py' --reload-include '*.html'
+      --reload-include '*.css' --reload-include '*.js'
+      --reload-exclude '.venv/*' --reload-exclude '.git/*'
+      --reload-exclude 'library_data/*' --reload-exclude 'models/*'
+      --reload-exclude 'docs/*' --reload-exclude 'uploads/*'
+    ports:
+      - "${OCEANFRAME_BIND:-127.0.0.1}:${DEV_PORT:-8080}:8080"
+    environment:
+      <<: [*common-env, *db-env, *curation-env]
+      LIB_DATA_DIR: /data/library
+    # A bind-mounted /app hides the image's own uploads dir, so that one stays
+    # on a volume rather than landing in your working tree.
+    volumes:
+      - .:/app
+      - uploads:/app/uploads
+      - library:/data/library
+      - ./models:/models
+
+  # ── Offline test suite ────────────────────────────────────────────────────
+  test:
+    profiles: ["test"]
+    build: { <<: *build, target: runtime }
+    image: oceanframe:core
+    environment:
+      <<: *common-env
+      LIB_DATA_DIR: /tmp/library
+    # Test dependencies are installed at run time so they never reach the
+    # shipped image.  Nothing is written to the working tree.
+    command: >-
+      sh -c "pip install --quiet --no-cache-dir -r requirements-dev.txt &&
+             python -m pytest -q"
+
+  # ── Live suite against NOAA's public bucket ───────────────────────────────
+  test-live:
+    profiles: ["live"]
+    build: { <<: *build, target: ml }
+    image: oceanframe:ml
+    environment:
+      <<: *common-env
+      LIB_DATA_DIR: /tmp/library
+      OCEANFRAME_LIVE_TESTS: "1"
+    volumes:
+      - ./models:/models
+    command: >-
+      sh -c "pip install --quiet --no-cache-dir -r requirements-dev.txt &&
+             python -m pytest tests/test_noaa_live.py -v -p no:randomly"
+
+  # ── Build a real catalog from NOAA open data ──────────────────────────────
+  # Writes into the same volume the app serves, so when it finishes you can
+  # `docker compose up -d` and browse ~2,800 real images.
+  quickstart:
+    profiles: ["quickstart"]
+    build: { <<: *build, target: "${QUICKSTART_TARGET:-runtime}" }
+    image: "oceanframe:${QUICKSTART_TAG:-core}"
+    environment:
+      <<: *common-env
+      PY: python
+    volumes:
+      - library:/data/library
+      - ./models:/models
+    command: ["./scripts/noaa_quickstart.sh"]
+
+volumes:
+  uploads:
+  library:
+  oceanframe-oracle-data:
+
+networks:
+  default:
+    # Named so docker-compose.t3-review.yml can join it.
+    name: oceanframe-local

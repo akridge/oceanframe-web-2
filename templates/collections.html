@@ -1,0 +1,87 @@
+{% set active = 'collections' %}
+{% extends "base.html" %}
+{% block title %}My collections — OceanFrame Library{% endblock %}
+{% block body_class %}lib-body{% endblock %}
+{% block page_css %}
+  <link rel="stylesheet" href="/static/library.css?v={{ asset_v }}" />
+{% endblock %}
+{% block topbar %}
+  <span class="topbar-title">Collections</span>
+  <div class="header-status">
+    <span id="status-assets" class="stat-chip">— assets</span>
+    <span id="status-embedder" class="stat-chip" title="Active embedding backend">—</span>
+  </div>
+  <div class="topbar-actions">
+    <a href="/collections/new" class="btn btn-primary btn-sm">+ Add collection</a>
+  </div>
+{% endblock %}
+{% block content %}
+<div id="notice-bar" class="notice-bar hidden"><span id="notice-text"></span>
+  <button type="button" class="notice-close" id="notice-close" aria-label="Dismiss">&times;</button>
+</div>
+
+<main class="page-shell">
+
+  <section class="panel">
+    <div class="card-body">
+      <div class="page-head">
+        <div>
+          <h2 class="page-title">My collections</h2>
+          <p class="card-subtitle">
+            A collection is one GCS prefix or local directory, with its own path-tag rule,
+            detection model and survey metadata. Re-indexing only touches objects whose
+            generation changed.
+          </p>
+        </div>
+        <a href="/collections/new" class="btn btn-primary">+ Add collection</a>
+      </div>
+      <div id="collection-summary" class="collection-summary"></div>
+      <div id="source-list" class="collection-cards"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="card-body system-grid">
+      <div class="system-panel">
+        <h4 class="section-head">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          Embeddings
+        </h4>
+        <p id="embed-detail" class="card-subtitle"></p>
+        <div class="admin-row">
+          <button type="button" class="btn btn-secondary btn-sm" id="embed-missing">Embed new assets</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="embed-rebuild">Rebuild all vectors</button>
+        </div>
+      </div>
+
+      <div class="system-panel">
+        <h4 class="section-head">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+          Models
+        </h4>
+        <div id="model-status" class="model-status"></div>
+      </div>
+
+      <div class="system-panel span-all">
+        <h4 class="section-head">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2"/></svg>
+          Activity
+        </h4>
+        <div id="job-list" class="job-list"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="job-toast" class="job-toast hidden">
+  <div class="job-toast-head">
+    <span id="job-toast-title">Working…</span>
+    <button type="button" class="link-btn" id="job-cancel">Cancel</button>
+  </div>
+  <div class="progress-track"><div id="job-toast-fill" class="progress-fill" style="width:0%"></div></div>
+  <div id="job-toast-msg" class="job-toast-msg"></div>
+</div>
+
+{% endblock %}
+{% block page_scripts %}<script type="module" src="/static/library/admin.js?v={{ asset_v }}"></script>{% endblock %}

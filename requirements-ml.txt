@@ -1,0 +1,38 @@
+# Optional model stack for the image library.  The app runs without any of it —
+# indexing, quality scoring, image-to-image similarity, dedupe, tagging and
+# dataset export all work on the dependency-free hash descriptor.  Install this
+# to add semantic *text* search and model-driven tagging.
+#
+#     pip install -r requirements-ml.txt
+#     LIB_EMBED_BACKEND=clip python -m library.cli embed --rebuild
+#
+# On a GPU workstation install the CUDA build of torch first, following
+# https://pytorch.org/get-started/locally/, then this file.
+
+torch>=2.2                # Runtime for CLIP, YOLO and SAM 3
+open_clip_torch>=2.24     # CLIP image/text embeddings -> semantic search
+ultralytics>=8.3.237      # YOLO detection/segmentation, and SAM 3 (8.3.237+)
+scikit-learn>=1.4        # Classification evaluation metrics
+
+# SAM 3's text encoder.  Ultralytics does not declare this as a dependency; it
+# tries to `pip install git+https://github.com/ultralytics/CLIP.git` the first
+# time a text prompt is used.  That runtime AutoUpdate fails in any sensible
+# container — no git, and site-packages is not writable for a non-root user —
+# and Ultralytics then returns *zero detections without raising*, so SAM 3 looks
+# like it ran and simply found nothing.  Installing it up front, from the GitHub
+# tarball so no git binary is needed, is the difference between SAM 3 working
+# and silently doing nothing.
+https://github.com/ultralytics/CLIP/archive/refs/heads/main.tar.gz
+
+# NOTE: ultralytics depends on the full `opencv-python`, which installs over the
+# `opencv-python-headless` from requirements.txt and then needs libGL/libxcb at
+# import time.  That is fine on a desktop and fatal on a headless server, so on
+# a server finish with:
+#
+#     pip uninstall -y opencv-python && pip install --force-reinstall opencv-python-headless
+#
+# The `ml` Docker target does this for you.
+
+# Optional: approximate nearest neighbours for catalogs past ~200k images.
+# The exact scan is used until then, and stays exact for any filtered query.
+# hnswlib>=0.8

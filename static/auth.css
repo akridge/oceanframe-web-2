@@ -1,0 +1,101 @@
+/* Sign-in, account and people pages. The header user menu now lives in the shell (shell.css). */
+
+.auth-body { background: var(--bg); min-height: 100vh; }
+
+.auth-shell {
+  max-width: 420px;
+  margin: 3rem auto;
+  padding: 0 1rem;
+  display: grid;
+  gap: 1.25rem;
+}
+.auth-shell-wide { max-width: 960px; }
+
+/* Panels: surface-1, hairline, radius 12 (same look as the shell's panels). */
+.auth-shell .card {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  box-shadow: none;
+  overflow: hidden;
+}
+.auth-shell .card-header {
+  display: flex; align-items: center; gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-7);
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+}
+.auth-shell .card-title { margin: 0; font-size: var(--fs-15); font-weight: var(--fw-semibold); color: var(--text); }
+.auth-shell .card-body { padding: var(--sp-6) var(--sp-7); }
+
+.auth-form {
+  display: grid;
+  gap: .45rem;
+}
+.auth-form .btn { margin-top: .5rem; justify-self: start; }
+
+.auth-input {
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-1);
+}
+.auth-input::placeholder { color: var(--text-3); }
+.auth-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
+
+.auth-error,
+.auth-status.is-error {
+  color: var(--danger);
+  background: var(--danger-tint);
+  padding: .5rem .65rem;
+  border-radius: var(--r-control);
+  margin: .25rem 0 0;
+}
+.auth-status { min-height: 1.2em; margin: .25rem 0 0; font-size: .9rem; color: var(--ok); }
+.auth-status:empty { display: none; }
+
+.user-table tr.is-inactive td { opacity: .55; }
+.user-actions { display: flex; gap: .35rem; justify-content: flex-end; }
+
+.user-create {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: .5rem;
+  align-items: center;
+}
+
+.role-help {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: .25rem 1rem;
+  font-size: .88rem;
+  color: var(--text-3);
+  margin: var(--sp-6) 0 0;
+}
+.role-help dt { font-weight: 600; color: var(--text); }
+.role-help dd { margin: 0; }
+
+.auth-card[hidden] { display: none; }
+
+/* The hint follows the label as ordinary text. */
+.auth-form .form-label { display: block; width: auto; }
+.auth-form .form-label .text-muted { font-weight: 400; }
+
+/* Sign-in: bare shell, centred card on --bg. */
+.login-shell { max-width: 380px; margin-top: 12vh; }
+.login-brand { display: flex; align-items: center; justify-content: center; gap: var(--sp-5); color: var(--text); }
+.login-brand svg { width: 32px; height: 32px; color: var(--accent); }
+.login-title { font-size: var(--fs-17); font-weight: var(--fw-semibold); }
+.login-credit { display: flex; align-items: center; justify-content: center; gap: var(--sp-4); margin: 0; font-size: var(--fs-12); color: var(--text-3); }
+.login-credit-logo { display: inline-flex; background: white; border-radius: var(--r-control); padding: 3px 8px; }
+.login-credit-logo img { height: 28px; width: auto; display: block; }
+
+@media (max-width: 900px) { .auth-shell-wide { max-width: 100%; } .auth-shell .table-responsive { overflow-x: auto; } }
+@media (max-width: 640px) {
+  .auth-shell { margin: var(--sp-6) auto; padding: 0 var(--sp-4); }
+  .auth-shell .card-header, .auth-shell .card-body { padding: var(--sp-5); }
+}

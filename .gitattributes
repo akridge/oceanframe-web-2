@@ -1,0 +1,33 @@
+# Line endings.
+#
+# Almost everything in this repo is executed inside a Linux container: the
+# shell scripts, the Dockerfile, compose, and the Makefile. A Windows checkout
+# with core.autocrlf=true rewrites them to CRLF, and the container then fails
+# with `env: 'bash\r': No such file or directory` because the CR is part of the
+# interpreter name. Pin LF so the checkout platform cannot break the build.
+* text=auto eol=lf
+
+# Explicit for the files where a stray CR is fatal rather than cosmetic.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+Makefile        text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+.env.example    text eol=lf
+.dockerignore   text eol=lf
+
+# Windows-native helpers keep CRLF; cmd.exe needs it.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# Binary — never touch, and never try to diff as text.
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.zip           binary
+*.pt            binary
+*.f32           binary
+*.sqlite        binary

@@ -1,0 +1,18 @@
+{
+  "kind": "model",
+  "repo_id": "NMFS-OSI/yolo11m-cls-noaa-pacific-benthic-cover-t3",
+  "sha": "77e10ec10d33dfb7f0a9ebabc542b2008bb96637",
+  "gated": false,
+  "private": false,
+  "card": {
+    "pipeline_tag": "image-classification", "library_name": "ultralytics", "license": "agpl-3.0",
+    "datasets": ["NMFS-OSI/noaa-pacific-benthic-cover-t3"], "base_model": ["Ultralytics/YOLO11"],
+    "tags": ["yolo", "coral"]
+  },
+  "files": [
+    {"path": "README.md", "size": 12000}, {"path": "confusion_matrix_normalized.png", "size": 400000},
+    {"path": "weights/best.pt", "size": 41000000},
+    {"path": "yolo11m_cls_noaa-pacific-benthic-t3.pt", "size": 41000000},
+    {"path": "yolo11m_cls_noaa-pacific-benthic-t3.onnx", "size": 80000000}
+  ]
+}

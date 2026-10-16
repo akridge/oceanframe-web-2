@@ -1,0 +1,35 @@
+# =============================================================================
+# GPU overlay for docker-compose.stack.yml
+# =============================================================================
+#   docker compose -f docker-compose.stack.yml -f docker-compose.stack.gpu.yml up -d --build
+#
+# Builds the app against the CUDA torch wheels and gives it the GPU, so CLIP
+# and SAM 3 run on it (SAM 3 runs inside the app; there is no separate service).
+#
+# A separate file rather than a profile in the stack file — the same lesson CAT
+# learned with its SAM 3 service: a profile gate did not reliably keep the
+# multi-GB CUDA build out of a plain `up`, and not defining it at all does.
+#
+# Needs the NVIDIA Container Toolkit on the host (`nvidia-ctk runtime
+# configure --runtime=docker`); the GPU installer sets that up and re-applies it
+# after every workstation restart.
+# =============================================================================
+
+services:
+  oceanframe-app:
+    build:
+      args:
+        # Empty = PyPI's default torch, which is the CUDA build.
+        TORCH_INDEX: ""
+    image: oceanframe:gpu
+    environment:
+      CUDA_VISIBLE_DEVICES: "${CUDA_VISIBLE_DEVICES:-0}"
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

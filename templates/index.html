@@ -1,0 +1,449 @@
+{% set active = 'frames' %}
+{% extends "base.html" %}
+{% block title %}OceanFrame — Marine Video Frame Analysis{% endblock %}
+{% block page_css %}
+  <link rel="stylesheet" href="/static/frames.css?v={{ asset_v }}" />
+{% endblock %}
+{% block topbar %}
+  <span class="topbar-title">Frame Analyser</span>
+  <nav class="tabs" aria-label="Sections">
+    <a href="#upload-section">Upload</a>
+    <a href="#parameters-section">Parameters</a>
+    <a href="#frames-section">Frames</a>
+    <a href="#export-section">Export</a>
+  </nav>
+  <!-- Session switcher (batch) -->
+  <div id="session-switcher" class="session-switcher hidden">
+    <label class="control-label" style="margin:0">Session</label>
+    <select id="session-select" class="select-sm"></select>
+  </div>
+{% endblock %}
+{% block content %}
+
+  <!--
+    Workspace shell:
+    - Left rail: ingest + run status controls
+    - Right stage: analysis controls, browser, and exports
+  -->
+  <div class="workspace-shell">
+    <aside class="workspace-rail">
+
+  <!-- ── Step 1: Upload ──────────────────────────── -->
+  <section id="upload-section" class="panel">
+    <div class="panel-head">
+      <div class="step-badge">1</div>
+      <div>
+        <h2 class="panel-heading title-with-icon">
+          <svg class="header-ocean-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3 14C5 11 7 11 9 14C11 17 13 17 15 14C17 11 19 11 21 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M5 10C6.2 8.4 8.1 8.4 9.3 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M14.7 10C15.9 8.4 17.8 8.4 19 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <span>Load Media</span>
+        </h2>
+        <p class="panel-sub">Drop a video file, a folder of images, or multiple image files</p>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="upload-layout">
+
+        <!--
+          Upload surface and media preview container.
+          IDs in this block are consumed by static/modules/upload.js.
+        -->
+        <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Upload media">
+          <div id="drop-zone-inner" class="drop-zone-inner">
+            <svg class="drop-icon" viewBox="0 0 48 48" fill="none">
+              <rect x="8" y="12" width="32" height="24" rx="3" stroke="currentColor" stroke-width="2"/>
+              <circle cx="19" cy="22" r="3" stroke="currentColor" stroke-width="2"/>
+              <path d="M8 30 L17 22 L24 28 L31 20 L40 30" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <p class="drop-primary">Drag &amp; drop here</p>
+            <p class="drop-secondary">
+              <button type="button" class="link-btn" id="browse-video-btn">video file</button>
+              &nbsp;or&nbsp;
+              <button type="button" class="link-btn" id="browse-images-btn">image folder / multiple images</button>
+            </p>
+            <p class="drop-formats">MP4 · MOV · AVI · MKV · MTS &nbsp;|&nbsp; JPG · PNG · TIFF</p>
+          </div>
+          <video id="video-preview" class="video-preview hidden" controls preload="metadata"></video>
+          <div id="images-preview" class="images-preview hidden"></div>
+          <div id="drop-zone-busy" class="drop-zone-busy hidden" role="status" aria-live="polite">
+            <span class="loading-spinner" aria-hidden="true"></span>
+            <span id="drop-zone-busy-text">Uploading media...</span>
+          </div>
+          <button id="clear-media-btn" class="clear-media-btn hidden" type="button" title="Clear and load new file">&#x2715; Clear</button>
+          <!-- Hidden native file inputs triggered by custom UI buttons. -->
+          <input type="file" id="file-input-video"  accept=".mp4,.mov,.avi,.mkv,.mts,.m2ts,.m4v" class="hidden-input" />
+          <input type="file" id="file-input-images" accept=".jpg,.jpeg,.png,.tiff,.tif,.bmp,.webp" class="hidden-input" multiple />
+        </div>
+
+        <!-- File metadata -->
+        <div id="file-meta" class="file-meta hidden">
+          <h3 class="meta-heading">Media Information</h3>
+          <table class="meta-table">
+            <tbody>
+              <tr><td class="meta-key">Source</td>    <td id="meta-file"   class="meta-val">—</td></tr>
+              <tr><td class="meta-key">Format</td>    <td id="meta-fmt"    class="meta-val">—</td></tr>
+              <tr><td class="meta-key">Size</td>      <td id="meta-size"   class="meta-val">—</td></tr>
+              <tr><td class="meta-key">Duration</td>  <td id="meta-dur"    class="meta-val">—</td></tr>
+              <tr><td class="meta-key">Frame rate</td><td id="meta-fps"    class="meta-val">—</td></tr>
+              <tr><td class="meta-key">Resolution</td><td id="meta-res"    class="meta-val">—</td></tr>
+              <tr><td class="meta-key">Frames</td>    <td id="meta-frames" class="meta-val">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Analysis mode + start action (wired in static/modules/analysis.js). -->
+      <div id="analysis-controls" class="analysis-controls hidden">
+        <div id="mode-group" class="mode-group">
+          <p class="control-label">Analysis mode</p>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input type="radio" name="mode" value="all" checked />
+              <span class="radio-mark"></span>
+              <span class="radio-text">
+                <strong>All frames</strong>
+                <span class="radio-desc">Full fidelity — analyses every frame in the video</span>
+              </span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="mode" value="keyframes" />
+              <span class="radio-mark"></span>
+              <span class="radio-text">
+                <strong>~1 frame / second</strong>
+                <span class="radio-desc">Fast overview — ideal for long dives or initial screening</span>
+              </span>
+            </label>
+          </div>
+        </div>
+        <button id="start-btn" class="btn btn-primary btn-large" disabled>
+          <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/></svg>
+          Run Analysis
+        </button>
+      </div>
+
+      <!-- Optional batch queue for processing multiple videos sequentially. -->
+      <div id="batch-queue" class="batch-queue hidden">
+        <p class="control-label" style="margin-bottom:8px">Queue</p>
+        <div id="batch-list" class="batch-list"></div>
+        <button id="add-to-queue-btn" class="btn btn-ghost btn-sm" style="margin-top:8px">
+          + Add more videos
+        </button>
+        <input type="file" id="file-input-queue" accept=".mp4,.mov,.avi,.mkv,.mts,.m2ts,.m4v" class="hidden-input" multiple />
+      </div>
+    </div>
+  </section>
+
+  <!-- Live analysis status card fed by SSE progress events. -->
+  <section id="progress-section" class="panel hidden">
+    <div class="panel-body">
+      <div class="progress-header">
+        <span id="progress-label" class="progress-label">Initialising…</span>
+        <div class="progress-stats">
+          <span id="progress-count" class="stat-chip">0 frames</span>
+          <span id="progress-pct"   class="stat-chip">0%</span>
+        </div>
+      </div>
+      <div class="progress-track">
+        <div id="progress-bar" class="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-footer">
+        <span id="progress-time" class="text-muted text-sm"></span>
+        <button id="cancel-btn" class="btn btn-ghost btn-sm">Cancel</button>
+      </div>
+    </div>
+  </section>
+
+    </aside>
+
+    <section class="workspace-stage">
+
+  <!-- Post-analysis filter controls and histograms. -->
+  <section id="parameters-section" class="panel hidden">
+    <div class="panel-head">
+      <div class="step-badge">2</div>
+      <div>
+        <h2 class="panel-heading title-with-icon">
+          <svg class="header-ocean-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 4L14.6 9.3L20.4 10.2L16.2 14.3L17.2 20L12 17.2L6.8 20L7.8 14.3L3.6 10.2L9.4 9.3L12 4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+          <span>Quality Thresholds</span>
+        </h2>
+        <p class="panel-sub">Adjust to control which frames are selected — changes apply instantly</p>
+      </div>
+    </div>
+    <div class="panel-body">
+
+      <!-- Big frame count -->
+      <div class="kept-stat">
+        <span id="kept-count" class="kept-count">—</span>
+        <span class="kept-label">frames selected</span>
+      </div>
+
+      <!-- Threshold preset manager (localStorage). -->
+      <div class="presets-bar">
+        <span class="control-label" style="margin:0">Presets</span>
+        <select id="preset-select" class="select-sm">
+          <option value="">— load a preset —</option>
+        </select>
+        <input id="preset-name" type="text" class="preset-name-input" placeholder="Name this preset…" />
+        <button id="preset-save-btn" class="btn btn-ghost btn-sm">Save</button>
+        <button id="preset-delete-btn" class="btn btn-ghost btn-sm" disabled>Delete</button>
+      </div>
+
+
+      <!-- Visual timeline for analysed frame coverage and quick scrubbing. -->
+      <div id="timeline-wrap" class="timeline-wrap hidden">
+        <p class="control-label" style="margin-bottom:4px">Coverage timeline</p>
+        <canvas id="timeline-canvas" class="timeline-canvas"></canvas>
+        <div class="timeline-labels">
+          <span id="tl-start">0:00</span>
+          <span id="tl-end">—</span>
+        </div>
+      </div>
+
+      <!-- Three threshold sliders -->
+      <div class="params-grid">
+
+        <!-- Blur -->
+        <div class="param-card">
+          <div class="param-header">
+            <div>
+              <h3 class="param-name">Sharpness threshold</h3>
+              <p class="param-desc">Frames below this sharpness score are discarded. Higher = stricter. Click a histogram bar to set.</p>
+            </div>
+            <span id="blur-val" class="param-value">20</span>
+          </div>
+          <input type="range" id="blur-slider" class="slider" min="0" max="500" value="20" step="1" />
+          <div class="slider-labels"><span>0 — accept all</span><span id="blur-slider-max">500 — strict</span></div>
+          <div class="chart-container"><canvas id="blur-chart"></canvas></div>
+          <p class="chart-caption">Sharpness distribution — click a bar to set threshold</p>
+        </div>
+
+
+        <div class="param-card">
+          <div class="param-header">
+            <div>
+              <h3 class="param-name">Duplicate removal</h3>
+              <p class="param-desc">Skips frames that look too similar to the previous kept frame. Low = keep near-duplicates; high = only keep frames where something has visibly changed.</p>
+            </div>
+            <span id="sim-val" class="param-value">8</span>
+          </div>
+          <input type="range" id="sim-slider" class="slider" min="0" max="32" value="8" step="1" />
+          <div class="slider-labels"><span>0 — keep duplicates</span><span>32 — maximum change required</span></div>
+          <div class="chart-container"><canvas id="sim-chart"></canvas></div>
+          <p class="chart-caption">How much the scene changes between consecutive frames — click a bar to set</p>
+        </div>
+
+
+        <div class="param-card">
+          <div class="param-header">
+            <div>
+              <h3 class="param-name">Brightness range</h3>
+              <p class="param-desc">Discard frames that are too dark (underexposed) or too bright (surface glare, lens flare). Set a minimum and maximum.</p>
+            </div>
+            <span id="bright-range-val" class="param-value" style="font-size:14px;min-width:64px">0–255</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="text-muted text-sm" style="width:28px">Min</span>
+              <input type="range" id="bright-min-slider" class="slider" min="0" max="255" value="0"   step="1" style="flex:1"/>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="text-muted text-sm" style="width:28px">Max</span>
+              <input type="range" id="bright-max-slider" class="slider" min="0" max="255" value="255" step="1" style="flex:1"/>
+            </div>
+          </div>
+          <div class="slider-labels"><span>0 — very dark</span><span>255 — very bright</span></div>
+          <div class="chart-container"><canvas id="bright-chart"></canvas></div>
+          <p class="chart-caption">Brightness distribution — drag sliders or click a bar</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Browsable results grid / coverage map. -->
+  <section id="frames-section" class="panel hidden">
+    <div class="panel-head">
+      <div class="step-badge">3</div>
+      <div>
+        <h2 class="panel-heading title-with-icon">
+          <svg class="header-ocean-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 5.4C12 5.4 6.3 8.4 6.3 13C6.3 16.1 8.8 18.6 12 18.6C15.2 18.6 17.7 16.1 17.7 13C17.7 8.4 12 5.4 12 5.4Z" stroke="currentColor" stroke-width="1.8"/>
+            <circle cx="12" cy="13" r="2.3" stroke="currentColor" stroke-width="1.6"/>
+          </svg>
+          <span>Frame Browser</span>
+        </h2>
+        <p class="panel-sub">Click to inspect, tag, or include/exclude individual frames</p>
+      </div>
+      <div class="panel-head-right browser-controls">
+        <label class="control-label" for="sort-select">Sort</label>
+        <select id="sort-select" class="select-sm">
+          <option value="index">By time</option>
+          <option value="blur_desc">Sharpest first</option>
+          <option value="blur_asc">Blurriest first</option>
+          <option value="bright_desc">Brightest first</option>
+          <option value="bright_asc">Darkest first</option>
+        </select>
+        <div class="size-btns">
+          <button class="size-btn active" data-size="sm" title="Small thumbnails">▪▪▪</button>
+          <button class="size-btn" data-size="md" title="Medium thumbnails">▪▪</button>
+          <button class="size-btn" data-size="lg" title="Large thumbnails">▪</button>
+          <button class="size-btn" data-size="sq" title="Coverage map — all frames as colour squares">⊞</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div id="frame-grid" class="frame-grid grid-sm"></div>
+      <div id="frames-empty" class="empty-state hidden">
+        <p>No frames match the current thresholds.</p>
+        <p class="text-muted text-sm">Try lowering the sharpness threshold or the similarity threshold.</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Export controls for image bundle and CSV metadata outputs. -->
+  <section id="export-section" class="panel hidden">
+    <div class="panel-head">
+      <div class="step-badge">4</div>
+      <div>
+        <h2 class="panel-heading title-with-icon">
+          <svg class="header-ocean-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 4V14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M8.5 10.5L12 14L15.5 10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 18H19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M4 8.5C5.2 7 6.8 7 8 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M16 8.5C17.2 7 18.8 7 20 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>Export</span>
+        </h2>
+        <p class="panel-sub">Download selected frames as images or metadata</p>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="export-layout">
+
+
+        <div class="export-group">
+          <h3 class="export-group-title title-with-icon">
+            <svg class="header-ocean-icon sm" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 16C6 13 8 13 10 16C12 19 14 19 16 16C18 13 20 13 22 16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+              <rect x="3" y="4" width="8" height="6" rx="1.2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M6 8L8 6L10 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Image Export</span>
+          </h3>
+          <div class="form-row">
+            <label class="form-label">Format</label>
+            <div class="radio-row">
+              <label class="radio-inline"><input type="radio" name="fmt" value="jpeg" checked /> JPEG</label>
+              <label class="radio-inline"><input type="radio" name="fmt" value="png" /> PNG</label>
+            </div>
+          </div>
+          <div class="form-row" id="quality-row">
+            <label class="form-label" for="quality-slider">Quality</label>
+            <div class="slider-with-val">
+              <input type="range" id="quality-slider" class="slider" min="60" max="100" value="90" step="5" />
+              <span id="quality-val" class="param-value">90</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="res-select">Max resolution</label>
+            <select id="res-select" class="select-sm">
+              <option value="">Original</option>
+              <option value="3840">4K (3840 px)</option>
+              <option value="1920">1080p (1920 px)</option>
+              <option value="1280">720p (1280 px)</option>
+              <option value="640">Thumbnail (640 px)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">EXIF data</label>
+            <label class="radio-inline">
+              <input type="checkbox" id="exif-checkbox" checked />
+              Embed frame metadata in JPEG EXIF
+            </label>
+          </div>
+          <button id="download-zip-btn" class="btn btn-primary" disabled>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            Download as ZIP (<span id="zip-frame-count">0</span> frames)
+          </button>
+          <div id="export-progress" class="export-progress hidden">
+            <div class="progress-track" style="margin-top:10px">
+              <div id="export-bar" class="progress-fill" style="width:0%"></div>
+            </div>
+            <p id="export-label" class="text-sm text-muted" style="margin-top:4px">Building ZIP…</p>
+          </div>
+        </div>
+
+
+        <div class="export-group">
+          <h3 class="export-group-title title-with-icon">
+            <svg class="header-ocean-icon sm" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 3.8L18.2 6.7V11.8C18.2 15.7 15.5 19.3 12 20.2C8.5 19.3 5.8 15.7 5.8 11.8V6.7L12 3.8Z" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M8.6 12.8C9.6 11.4 10.9 11.4 12 12.8C13.1 14.2 14.4 14.2 15.4 12.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            <span>Data &amp; Metadata</span>
+          </h3>
+          <p class="export-desc">
+            Download frame quality scores, timestamps, tags, and status for further
+            analysis in R, Python, or Excel.
+          </p>
+          <button id="download-csv-btn" class="btn btn-secondary" disabled>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            Download frame data (CSV)
+          </button>
+          <p class="csv-desc text-sm text-muted">
+            Columns: frame index · timestamp · sharpness · brightness · colour cast · status · tags
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+    </section>
+  </div>
+
+
+<!-- Frame detail modal for review, include/exclude overrides, and tagging. -->
+<div id="lightbox" class="lightbox hidden" role="dialog" aria-modal="true">
+  <button class="lightbox-close" id="lightbox-close" aria-label="Close">&times;</button>
+  <button class="lightbox-nav lightbox-prev" id="lightbox-prev">&#8249;</button>
+  <button class="lightbox-nav lightbox-next" id="lightbox-next">&#8250;</button>
+  <div class="lightbox-inner">
+    <img id="lightbox-img" src="" alt="Full frame" />
+    <div class="lightbox-meta">
+      <dl class="lightbox-dl">
+        <dt>Frame</dt>      <dd id="lb-index">—</dd>
+        <dt>Timestamp</dt>  <dd id="lb-ts">—</dd>
+        <dt>Sharpness</dt>  <dd id="lb-blur">—</dd>
+        <dt>Brightness</dt> <dd id="lb-bright">—</dd>
+        <dt>Colour cast</dt><dd id="lb-cast">—</dd>
+        <dt>Hash</dt>       <dd id="lb-hash" class="mono">—</dd>
+      </dl>
+      <div class="lightbox-actions">
+        <button id="lb-toggle-btn" class="btn btn-sm btn-ghost">Exclude this frame</button>
+        <div class="tag-section">
+          <div id="tag-chips" class="tag-chips"></div>
+          <div class="tag-input-row">
+            <input id="tag-input" type="text" class="tag-input" placeholder="Add tag (e.g. coral, fish, turbid)…" />
+            <button id="tag-add-btn" class="btn btn-sm btn-ghost">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="lightbox-backdrop" class="lightbox-backdrop hidden"></div>
+
+{% endblock %}
+{% block page_scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- Frontend entrypoint; composes all UI modules under static/modules/*.js -->
+  <script type="module" src="/static/app.js?v={{ asset_v }}"></script>
+{% endblock %}

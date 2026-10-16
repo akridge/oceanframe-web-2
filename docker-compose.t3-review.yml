@@ -1,0 +1,47 @@
+# Reviews are saved to the main app's Oracle database and need a sign-in.
+# Start that Oracle first: `make up`, or the stack (docker-compose.stack.yml)
+# with OCEANFRAME_NETWORK=oceanframe-net. They are alternatives: one Oracle at a time.
+name: oceanframe-t3-review
+
+services:
+  review:
+    build:
+      context: .
+      target: runtime
+    image: oceanframe:t3-review
+    container_name: oceanframe-t3-review
+    init: true
+    restart: unless-stopped
+    command: ["bash", "/app/docker-entrypoint.sh"]
+    networks: [db]
+    ports:
+      - "127.0.0.1:${T3_REVIEW_PORT:-8094}:8080"
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8080"
+      OPEN_BROWSER: "0"
+      OCEANFRAME_AUTH: "on"
+      OCEANFRAME_DB_USER: "${APP_SCHEMA_NAME:-oceanframe}"
+      OCEANFRAME_DB_PASSWORD: "${APP_SCHEMA_PASSWORD:?Set APP_SCHEMA_PASSWORD in .env}"
+      OCEANFRAME_DB_DSN: "oceanframe-oracle:1521/${DB_SERVICE_NAME:-FREEPDB1}"
+      OCEANFRAME_REQUIRE_ORACLE: "on"
+      LIB_DATA_DIR: /data/library
+      LIB_EMBED_BACKEND: hash
+      LIB_GCS_ANONYMOUS: "yes"
+      CURATION_EVAL_DIR: /data/t3-evaluation
+      CURATION_SEED: ""
+      CURATION_STARTER_DATA: "off"
+      CURATION_TRUSTED_CHECKPOINTS: "off"
+      # One coordinator per database: the main app runs the import and evaluation
+      # workers and their start-up recovery; this second process must not.
+      OCEANFRAME_BACKGROUND_WORKERS: "off"
+    volumes:
+      - ./library_data/t3_review:/data/library
+      - ./library_data/curation_eval:/data/t3-evaluation:ro
+
+networks:
+  # The network the running Oracle is on: oceanframe-local under `make up`
+  # (the default), oceanframe-net under the stack.
+  db:
+    external: true
+    name: "${OCEANFRAME_NETWORK:-oceanframe-local}"

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <title>{% block title %}OceanFrame{% endblock %}</title>
+  <script>(function(){window.OF_ASSET_V='{{ asset_v }}';var c='system';try{c=localStorage.getItem('of-theme')||'system'}catch(e){}if(c!=='dark'&&c!=='light')c='system';var l=!!(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches);document.documentElement.setAttribute('data-theme',c==='system'?(l?'light':'dark'):c)})()</script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M3 21q5-7 10 0t10-7' stroke='%230a84ff' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='11' r='4' stroke='%230a84ff' stroke-width='2.5' fill='none'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/static/vendor/bootstrap-icons/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="/static/ui/tokens.css?v={{ asset_v }}" />
+  <link rel="stylesheet" href="/static/ui/base.css?v={{ asset_v }}" />
+  <link rel="stylesheet" href="/static/ui/components.css?v={{ asset_v }}" />
+  <link rel="stylesheet" href="/static/ui/shell.css?v={{ asset_v }}" />
+  {% block page_css %}{% endblock %}
+  <script src="/static/ui/ui.js?v={{ asset_v }}"></script>
+</head>
+<body class="of-app{% if bare %} of-bare{% endif %} {% block body_class %}{% endblock %}" {% block body_attrs %}{% endblock %}>
+{% if not bare %}
+  <nav class="rail" id="rail" aria-label="Apps">
+    <a class="rail-logo" href="/" aria-label="OceanFrame home">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M4 20 Q8 14 12 18 Q16 22 20 16 Q24 10 28 14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="16" cy="12" r="4" stroke="currentColor" stroke-width="2"/><line x1="16" y1="16" x2="16" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </a>
+    {% for href, key, label, icon in [("/", "library", "Library", "bi-images"), ("/collections", "collections", "Collections", "bi-collection"), ("/curation", "curation", "Curation", "bi-bullseye"), ("/frames", "frames", "Frame Analyser", "bi-film")] %}
+    <a class="rail-item{% if active == key %} active{% endif %}" href="{{ href }}"{% if active == key %} aria-current="page"{% endif %} title="{{ label }}">
+      <i class="bi {{ icon }}" aria-hidden="true"></i><span class="rail-label">{{ label }}</span>
+    </a>
+    {% endfor %}
+    <span class="rail-spacer"></span>
+    <a class="rail-item{% if active == 'users' %} active{% endif %}" id="rail-users" href="/users" title="Users" hidden{% if active == 'users' %} aria-current="page"{% endif %}>
+      <i class="bi bi-people" aria-hidden="true"></i><span class="rail-label">Users</span>
+    </a>
+    <button class="rail-avatar" id="rail-avatar" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="user-menu" title="Account and theme">
+      <i class="bi bi-person" aria-hidden="true"></i>
+    </button>
+  </nav>
+  <div id="user-menu" class="user-menu" role="menu" hidden></div>
+{% endif %}
+  <div class="app-main">
+{% if not bare %}
+    <header class="topbar">
+      {% block topbar %}{% endblock %}
+      <button class="topbar-search" type="button" data-palette-open aria-label="Search and commands (Ctrl+K)">
+        <i class="bi bi-search" aria-hidden="true"></i><span class="topbar-search-text">Search</span><kbd class="kbd">⌘K</kbd>
+      </button>
+    </header>
+{% endif %}
+    <main class="app-content" id="app-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <div id="of-toasts" class="toast-host" aria-live="polite"></div>
+  <dialog id="of-palette" class="palette" aria-label="Search and commands">
+    <div class="palette-field"><i class="bi bi-search" aria-hidden="true"></i><input id="of-palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="Go to a project, view, image or action…" aria-controls="of-palette-results" /></div>
+    <div id="of-palette-results" class="palette-results" role="listbox"></div>
+  </dialog>
+{% if not bare %}
+  <script type="module" src="/static/auth/menu.js?v={{ asset_v }}"></script>
+{% endif %}
+  {% block page_scripts %}{% endblock %}
+</body>
+</html>

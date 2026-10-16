@@ -1,0 +1,101 @@
+/* OceanFrame design tokens. Dark is the default; light uses the same names.
+   Set on <html data-theme="dark|light"> by the inline script in base.html. */
+
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", Inter, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --fs-11: 11px; --fs-12: 12px; --fs-13: 13px; --fs-15: 15px; --fs-17: 17px; --fs-22: 22px; --fs-28: 28px;
+  --fw-regular: 400; --fw-semibold: 590; --fw-bold: 700;
+  --sp-1: 2px; --sp-2: 4px; --sp-3: 6px; --sp-4: 8px; --sp-5: 12px; --sp-6: 16px; --sp-7: 20px; --sp-8: 24px; --sp-9: 32px; --sp-10: 48px;
+  --r-control: 7px; --r-tile: 9px; --r-panel: 12px; --r-sheet: 14px; --r-pill: 999px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --t-fast: 150ms; --t: 200ms; --t-slow: 250ms;
+  --rail-w: 64px; --topbar-h: 44px;
+}
+
+:root:not([data-theme="light"]), :root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1c1c1e;
+  --bg-rail: #111113;
+  --surface-1: #2c2c2e;
+  --surface-2: #3a3a3c;
+  --surface-3: #48484a;
+  --line: #38383a;
+  --text: #f5f5f7;
+  --text-2: #c7c7cc;
+  --text-3: #98989f;
+  --accent: #0a84ff;
+  --accent-fill: #0071e3;
+  --accent-text: #64b5ff;
+  --ok: #30d158;
+  --warn: #ff9f0a;
+  --danger: #ff453a;
+  --danger-fill: #d70015;
+}
+:root:not([data-theme="light"]), :root[data-theme="dark"] {
+  --scrim: rgba(0, 0, 0, .5);
+  --shadow-pop: 0 10px 30px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .06);
+  --shadow-sheet: 0 24px 60px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .08);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f5f7;
+  --bg-rail: #e8e8ed;
+  --surface-1: #ffffff;
+  --surface-2: #e8e8ed;
+  --surface-3: #d2d2d7;
+  --line: #d2d2d7;
+  --text: #1d1d1f;
+  --text-2: #424245;
+  --text-3: #6e6e73;
+  --accent: #0071e3;
+  --accent-fill: #0071e3;
+  --accent-text: #0066cc;
+  --ok: #1f8a3a;
+  --warn: #b25e00;
+  --danger: #d70015;
+  --danger-fill: #d70015;
+}
+:root[data-theme="light"] {
+  --scrim: rgba(0, 0, 0, .3);
+  --shadow-pop: 0 10px 30px rgba(0, 0, 0, .12), 0 0 0 1px rgba(0, 0, 0, .06);
+  --shadow-sheet: 0 24px 60px rgba(0, 0, 0, .18), 0 0 0 1px rgba(0, 0, 0, .08);
+}
+
+:root {
+  --focus: color-mix(in srgb, var(--accent) 45%, transparent);
+  --accent-tint: color-mix(in srgb, var(--accent) 18%, transparent);
+  --ok-tint: color-mix(in srgb, var(--ok) 18%, transparent);
+  --warn-tint: color-mix(in srgb, var(--warn) 18%, transparent);
+  --danger-tint: color-mix(in srgb, var(--danger) 18%, transparent);
+  --glass: color-mix(in srgb, var(--bg) 72%, transparent);
+  --glass-strong: color-mix(in srgb, var(--surface-1) 88%, transparent);
+
+  /* Legacy names, kept as aliases onto the tokens for any page rule that still uses them. */
+  --surface: var(--surface-1);
+  --border: var(--line);
+  --border-focus: var(--accent);
+  --primary: var(--accent-fill);
+  --primary-dark: color-mix(in srgb, var(--accent-fill) 80%, black);
+  --primary-light: var(--accent-tint);
+  --text-muted: var(--text-3);
+  --text-light: var(--text-3);
+  --success: var(--ok);
+  --success-bg: var(--ok-tint);
+  --warning: var(--warn);
+  --warning-bg: var(--warn-tint);
+  --error: var(--danger);
+  --error-bg: var(--danger-tint);
+  --shadow-sm: none;
+  --shadow: 0 0 0 1px var(--line);
+  --shadow-md: var(--shadow-pop);
+  --shadow-lg: var(--shadow-sheet);
+  --radius: var(--r-tile);
+  --radius-sm: var(--r-control);
+  --radius-lg: var(--r-panel);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-fast: 0ms; --t: 0ms; --t-slow: 0ms; }
+}

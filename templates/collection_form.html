@@ -1,0 +1,126 @@
+{% set active = 'collections' %}
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if source_id else 'Add' }} collection — OceanFrame Library{% endblock %}
+{% block body_class %}lib-body{% endblock %}
+{% block page_css %}
+  <link rel="stylesheet" href="/static/library.css?v={{ asset_v }}" />
+{% endblock %}
+{% block topbar %}
+  <span class="topbar-title">{{ 'Edit' if source_id else 'Add' }} collection</span>
+  <div class="topbar-actions">
+    <a href="/collections" class="btn btn-ghost btn-sm">My collections</a>
+  </div>
+{% endblock %}
+{% block content %}
+<div id="notice-bar" class="notice-bar hidden"><span id="notice-text"></span>
+  <button type="button" class="notice-close" id="notice-close" aria-label="Dismiss">&times;</button>
+</div>
+
+<main class="page-shell narrow">
+  <form id="collection-form" class="panel" data-source-id="{{ source_id }}" novalidate>
+    <div class="card-body">
+      <h2 class="page-title" id="form-title">{{ 'Edit collection' if source_id else 'Add a collection' }}</h2>
+
+      <fieldset class="form-section">
+        <legend>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+          Source
+        </legend>
+        <label class="control-label" for="source-root">Location</label>
+        <input type="text" id="source-root" class="tag-input grow full" required
+               placeholder="gs://bucket/prefix or /data/images" />
+        <div class="form-grid two">
+          <div>
+            <label class="control-label" for="source-pattern">Path-tag rule (regex, optional)</label>
+            <input type="text" id="source-pattern" class="tag-input full" spellcheck="false"
+                   placeholder="(?P&lt;year&gt;\d{4})/(?P&lt;site&gt;[^/]+)" />
+          </div>
+          <div>
+            <label class="control-label" for="source-model">Detection model</label>
+            <select id="source-model" class="select-sm full" title="Model used when scanning this collection">
+              <option value="">default model</option>
+            </select>
+          </div>
+        </div>
+        <div id="index-options" class="admin-row">
+          <label class="check-row inline"><input type="checkbox" id="index-force" /> Re-read everything</label>
+          <input type="number" id="index-limit" class="tag-input" style="width:140px" min="0" placeholder="limit (0 = all)" />
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section inport-section">
+        <legend>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>
+          NOAA InPort record <span class="muted-row">(optional)</span>
+        </legend>
+        <p class="card-subtitle">
+          Paste the metadata record for this collection and press Lookup to fill in any empty
+          fields below — e.g. <span class="mono">https://www.fisheries.noaa.gov/inport/item/76360</span>.
+        </p>
+        <div class="admin-row">
+          <input type="url" id="inport-url" class="tag-input grow" placeholder="https://www.fisheries.noaa.gov/inport/item/…" />
+          <button type="button" class="btn btn-secondary btn-sm" id="inport-lookup">Lookup</button>
+        </div>
+        <div id="inport-preview" class="inport-preview hidden"></div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01"/></svg>
+          Metadata
+        </legend>
+        <div class="form-grid two">
+          <div class="span-2">
+            <label class="control-label" for="meta-label">Name</label>
+            <input type="text" id="meta-label" class="tag-input full" maxlength="300" placeholder="defaults to the folder name" />
+          </div>
+          <div>
+            <label class="control-label" for="meta-year-start">Year from</label>
+            <input type="number" id="meta-year-start" class="tag-input full" min="1800" max="2200" placeholder="e.g. 2025" />
+          </div>
+          <div>
+            <label class="control-label" for="meta-year-end">Year to</label>
+            <input type="number" id="meta-year-end" class="tag-input full" min="1800" max="2200" placeholder="same as from" />
+          </div>
+          <div>
+            <label class="control-label" for="meta-survey">Survey / cruise / project</label>
+            <input type="text" id="meta-survey" class="tag-input full" maxlength="500" />
+          </div>
+          <div>
+            <label class="control-label" for="meta-region">Region / location</label>
+            <input type="text" id="meta-region" class="tag-input full" maxlength="500" placeholder="e.g. Tutuila, American Samoa" />
+          </div>
+          <div class="span-2">
+            <label class="control-label" for="meta-contact">PI / contact</label>
+            <input type="text" id="meta-contact" class="tag-input full" maxlength="500" />
+          </div>
+          <div class="span-2">
+            <label class="control-label" for="meta-description">Description / notes</label>
+            <textarea id="meta-description" class="tag-input full" rows="5" maxlength="20000"></textarea>
+          </div>
+        </div>
+
+        <label class="control-label">Extra fields</label>
+        <div id="extras-rows" class="extras-rows"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="extras-add">+ Add field</button>
+      </fieldset>
+
+      <div class="form-actions">
+        <a href="/collections" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary" id="form-submit">{{ 'Save' if source_id else 'Save & index' }}</button>
+      </div>
+    </div>
+  </form>
+</main>
+
+<div id="job-toast" class="job-toast hidden">
+  <div class="job-toast-head">
+    <span id="job-toast-title">Working…</span>
+    <button type="button" class="link-btn" id="job-cancel">Cancel</button>
+  </div>
+  <div class="progress-track"><div id="job-toast-fill" class="progress-fill" style="width:0%"></div></div>
+  <div id="job-toast-msg" class="job-toast-msg"></div>
+</div>
+
+{% endblock %}
+{% block page_scripts %}<script type="module" src="/static/library/collection-form.js?v={{ asset_v }}"></script>{% endblock %}

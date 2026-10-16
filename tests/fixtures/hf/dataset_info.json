@@ -1,0 +1,34 @@
+{
+  "kind": "dataset",
+  "repo_id": "NMFS-OSI/noaa-pacific-benthic-cover-t3",
+  "sha": "b47bff4ecdcdb026d31d1a154ff267227ff0f1b6",
+  "gated": false,
+  "private": false,
+  "card": {
+    "task_categories": ["image-classification"],
+    "size_categories": ["100K<n<1M"],
+    "configs": [{"config_name": "default", "data_files": [
+      {"split": "train", "path": "data/train.parquet"},
+      {"split": "validation", "path": "data/val.parquet"},
+      {"split": "test", "path": "data/test.parquet"}]}],
+    "dataset_info": {
+      "features": [
+        {"name": "image_url", "dtype": "string"}, {"name": "gcs_uri", "dtype": "string"},
+        {"name": "label", "dtype": "int64"}, {"name": "label_name", "dtype": "string"},
+        {"name": "label_desc", "dtype": "string"}, {"name": "file_name", "dtype": "string"},
+        {"name": "split", "dtype": "string"}],
+      "splits": [
+        {"name": "train", "num_examples": 265046},
+        {"name": "validation", "num_examples": 56770},
+        {"name": "test", "num_examples": 56864}]
+    },
+    "tags": ["coral", "noaa", "pacific"]
+  },
+  "files": [
+    {"path": ".gitattributes", "size": 2400}, {"path": "README.md", "size": 9000},
+    {"path": "class_list_full.csv", "size": 3000},
+    {"path": "data/train.parquet", "size": 9000000}, {"path": "data/val.parquet", "size": 2000000},
+    {"path": "data/test.parquet", "size": 2000000},
+    {"path": "data_csv/test.csv", "size": 9000000}
+  ]
+}

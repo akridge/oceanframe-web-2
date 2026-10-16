@@ -1,0 +1,4 @@
+# Test-only dependencies.  Not in the shipped image — the `test` and `test-live`
+# compose services install these at run time, so the runtime image stays lean.
+pytest>=8.0                # Test runner
+httpx2>=0.28               # Required by starlette's TestClient for the API tests

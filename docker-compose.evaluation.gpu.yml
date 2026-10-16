@@ -1,0 +1,12 @@
+services:
+  oceanframe-evaluation:
+    build:
+      args:
+        TORCH_INDEX: ""
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

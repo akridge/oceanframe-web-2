@@ -1,0 +1,55 @@
+{% set bare = true %}
+{% extends "base.html" %}
+{% block title %}Sign in — OceanFrame{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="/static/auth.css?v={{ asset_v }}" />{% endblock %}
+{% block content %}
+<div class="auth-shell login-shell">
+  <div class="login-brand">
+    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M4 20 Q8 14 12 18 Q16 22 20 16 Q24 10 28 14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="16" cy="12" r="4" stroke="currentColor" stroke-width="2"/><line x1="16" y1="16" x2="16" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <span class="login-title">OceanFrame</span>
+  </div>
+
+  <section class="card auth-card" id="login-card">
+    <div class="card-header"><h2 class="card-title">Sign in</h2></div>
+    <form class="card-body auth-form" id="login-form" data-next="{{ next }}">
+      <label class="form-label" for="username">Username</label>
+      <input class="auth-input" id="username" name="username" autocomplete="username" required autofocus />
+      <label class="form-label" for="password">Password</label>
+      <input class="auth-input" id="password" name="password" type="password" autocomplete="current-password" required />
+      <p class="auth-error" id="login-error" role="alert" hidden></p>
+      <button class="btn btn-primary" type="submit" id="login-submit">Sign in</button>
+      {% if allow_signup %}
+      <p class="text-muted text-sm">New here? <a href="#signup" id="show-signup">Create an account</a></p>
+      {% else %}
+      <p class="text-muted text-sm">No account? Ask your OceanFrame admin to create one.</p>
+      {% endif %}
+    </form>
+  </section>
+
+  {% if allow_signup %}
+  <section class="card auth-card" id="signup-card" hidden>
+    <div class="card-header"><h2 class="card-title">Create an account</h2></div>
+    <form class="card-body auth-form" id="signup-form" data-next="{{ next }}">
+      <label class="form-label" for="su-username">Username <span class="text-muted">— letters, digits, . _ -</span></label>
+      <input class="auth-input" id="su-username" name="username" autocomplete="username" required minlength="3" maxlength="120" pattern="[A-Za-z0-9][A-Za-z0-9._\-]{2,119}" />
+      <label class="form-label" for="su-display">Your name <span class="text-muted">— shown on everything you curate</span></label>
+      <input class="auth-input" id="su-display" name="display_name" autocomplete="name" maxlength="120" required />
+      <label class="form-label" for="su-email">Email <span class="text-muted">— optional</span></label>
+      <input class="auth-input" id="su-email" name="email" type="email" autocomplete="email" maxlength="255" />
+      <label class="form-label" for="su-password">Password <span class="text-muted">— at least 8 characters</span></label>
+      <input class="auth-input" id="su-password" name="password" type="password" autocomplete="new-password" required minlength="8" />
+      <label class="form-label" for="su-confirm">Password again</label>
+      <input class="auth-input" id="su-confirm" type="password" autocomplete="new-password" required minlength="8" />
+      <p class="auth-error" id="signup-error" role="alert" hidden></p>
+      <button class="btn btn-primary" type="submit" id="signup-submit">Create account</button>
+      <p class="text-muted text-sm">You start as a <strong>{{ signup_role }}</strong>; an admin can change that.
+        Have an account? <a href="#signin" id="show-login">Sign in</a></p>
+    </form>
+  </section>
+  {% endif %}
+
+  <p class="login-credit">an app by <span class="login-credit-logo"><img src="/static/img/optics-si-logo.png" alt="OPTICS SI" height="28" /></span></p>
+</div>
+{% endblock %}
+{% block page_scripts %}<script type="module" src="/static/auth/login.js?v={{ asset_v }}"></script>{% endblock %}

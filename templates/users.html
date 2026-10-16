@@ -1,0 +1,40 @@
+{% set active = 'users' %}
+{% extends "base.html" %}
+{% block title %}Users — OceanFrame{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="/static/auth.css?v={{ asset_v }}" />{% endblock %}
+{% block topbar %}<span class="topbar-title">Users</span>{% endblock %}
+{% block content %}
+<div class="auth-shell auth-shell-wide">
+  <section class="panel">
+    <div class="panel-title">
+      <h2>People</h2>
+      <span class="text-muted text-sm">viewer · curator · lead · admin — each role can do everything the ones before it can</span>
+    </div>
+    <table class="table user-table">
+      <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead>
+      <tbody id="user-rows"><tr><td colspan="5" class="text-muted">Loading…</td></tr></tbody>
+    </table>
+    <p class="auth-status" id="users-status" role="status"></p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title"><h2>Add a person</h2></div>
+    <form class="user-create" id="create-form">
+      <input class="auth-input" name="username" placeholder="username" required minlength="3" maxlength="120" />
+      <input class="auth-input" name="display_name" placeholder="display name" maxlength="120" />
+      <input class="auth-input" name="email" type="email" placeholder="email (optional)" maxlength="255" />
+      <select class="form-select" name="role" id="create-role"></select>
+      <input class="auth-input" name="password" type="text" placeholder="first password (8+)" required minlength="8" autocomplete="off" />
+      <button class="btn btn-primary" type="submit">Add</button>
+    </form>
+    <dl class="role-help">
+      <dt>viewer</dt><dd>browse, search and export</dd>
+      <dt>curator</dt><dd>also tag, build datasets, relabel and review in curation projects</dd>
+      <dt>lead</dt><dd>also add and edit collections, run indexing and imports, create and delete curation projects</dd>
+      <dt>admin</dt><dd>also manage people</dd>
+    </dl>
+  </section>
+</div>
+{% endblock %}
+{% block page_scripts %}<script type="module" src="/static/auth/users.js?v={{ asset_v }}"></script>{% endblock %}

@@ -1,0 +1,280 @@
+{% set active = 'library' %}
+{% extends "base.html" %}
+{% block title %}OceanFrame Library — Image Search & Datasets{% endblock %}
+{% block body_class %}lib-body{% endblock %}
+{% block page_css %}
+  <link rel="stylesheet" href="/static/library.css?v={{ asset_v }}" />
+{% endblock %}
+{% block topbar %}
+  <span class="topbar-title">Library</span>
+  <nav class="tabs" aria-label="Library views">
+    <a href="/" aria-current="page">All</a>
+    <a href="#" id="open-datasets">Datasets</a>
+  </nav>
+  <div class="search-row">
+    <div class="search-input-wrap">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/>
+        <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <input type="search" id="search-text" class="search-input"
+             placeholder="Describe what you are looking for…" autocomplete="off" />
+    </div>
+    <select id="search-mode" class="select-sm" title="Search mode">
+      <option value="auto">Semantic</option>
+      <option value="keyword">Filename / tag</option>
+    </select>
+    <button type="button" class="btn btn-primary btn-sm" id="search-btn">Search</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="search-image-btn"
+            title="Find images that look like a file on your machine">By image</button>
+    <input type="file" id="search-image-input" accept="image/*" class="hidden-input" />
+  </div>
+  <div class="topbar-actions">
+    <a href="/collections" class="btn btn-ghost btn-sm">My collections</a>
+    <a href="/collections/new" class="btn btn-primary btn-sm">+ Add collection</a>
+  </div>
+{% endblock %}
+{% block content %}
+<!-- Banner for a degraded backend (no CLIP -> no text search, etc.) -->
+<div id="notice-bar" class="notice-bar hidden"><span id="notice-text"></span>
+  <button type="button" class="notice-close" id="notice-close" aria-label="Dismiss">&times;</button>
+</div>
+
+<main class="lib-shell">
+
+  <!-- ── Left rail: scope and filters ─────────────────────────────────── -->
+  <aside class="lib-rail">
+
+    <section class="panel lib-card" id="collections-card">
+      <div class="card-header compact">
+        <h2 class="card-title">Collections</h2>
+        <button type="button" class="link-btn" id="sources-reset">All</button>
+      </div>
+      <div class="card-body">
+        <div id="source-filter" class="source-filter"></div>
+      </div>
+    </section>
+
+    <section class="panel lib-card hidden" id="survey-card">
+      <div class="card-header compact">
+        <h2 class="card-title">Survey</h2>
+        <button type="button" class="link-btn" id="survey-reset">All</button>
+      </div>
+      <div class="card-body">
+        <div id="facet-years-wrap">
+          <div class="control-label">Year</div>
+          <div id="facet-years" class="facet-list"></div>
+        </div>
+        <div id="facet-surveys-wrap">
+          <div class="control-label">Survey</div>
+          <div id="facet-surveys" class="facet-list"></div>
+        </div>
+        <div id="facet-regions-wrap">
+          <div class="control-label">Region</div>
+          <div id="facet-regions" class="facet-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel lib-card">
+      <div class="card-header compact">
+        <h2 class="card-title">Folders</h2>
+        <button type="button" class="link-btn" id="folder-reset">All</button>
+      </div>
+      <div class="card-body">
+        <div id="folder-crumbs" class="crumbs"></div>
+        <ul id="folder-tree" class="folder-tree"><li class="muted-row">Loading…</li></ul>
+      </div>
+    </section>
+
+    <section class="panel lib-card">
+      <div class="card-header compact">
+        <h2 class="card-title">Quality</h2>
+        <button type="button" class="link-btn" id="quality-reset">Reset</button>
+      </div>
+      <div class="card-body">
+        <label class="control-label" for="quality-min">
+          OceanFrame score ≥ <span id="quality-min-val" class="mono">0</span>
+        </label>
+        <input type="range" id="quality-min" min="0" max="100" step="1" value="0" class="slider" />
+        <div id="quality-bands" class="band-row"></div>
+        <label class="check-row">
+          <input type="checkbox" id="filter-dedupe" /> Collapse near-duplicates
+        </label>
+        <label class="check-row">
+          <input type="checkbox" id="filter-untagged" /> Only untagged
+        </label>
+        <label class="check-row">
+          <input type="checkbox" id="filter-unannotated" /> Only un-annotated
+        </label>
+      </div>
+    </section>
+
+    <section class="panel lib-card">
+      <div class="card-header compact">
+        <h2 class="card-title">Tags</h2>
+        <button type="button" class="link-btn" id="tags-reset">Clear</button>
+      </div>
+      <div class="card-body">
+        <div id="facet-tags" class="facet-list"><span class="muted-row">—</span></div>
+      </div>
+    </section>
+
+    <section class="panel lib-card">
+      <div class="card-header compact">
+        <h2 class="card-title">Detected classes</h2>
+        <button type="button" class="link-btn" id="labels-reset">Clear</button>
+      </div>
+      <div class="card-body">
+        <label class="control-label" for="label-conf">
+          Min confidence <span id="label-conf-val" class="mono">0.25</span>
+        </label>
+        <input type="range" id="label-conf" min="0" max="0.95" step="0.05" value="0.25" class="slider" />
+        <div id="facet-labels" class="facet-list"><span class="muted-row">Run YOLO or SAM 3 to populate</span></div>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- ── Main stage: search + results ─────────────────────────────────── -->
+  <section class="lib-main">
+
+    <div id="active-filters" class="active-filters"></div>
+
+    <div id="collection-banner" class="collection-banner hidden"></div>
+
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <span id="result-count" class="result-count">—</span>
+        <span id="result-note" class="result-note"></span>
+        <span id="status-assets" class="stat-chip">— assets</span>
+        <span id="status-embedder" class="stat-chip" title="Active embedding backend">—</span>
+      </div>
+      <div class="toolbar-right">
+        <label class="control-label inline" for="sort-select">Sort</label>
+        <select id="sort-select" class="select-sm">
+          <option value="relevance">Relevance</option>
+          <option value="quality">Best quality</option>
+          <option value="worst">Worst quality</option>
+          <option value="sharpest">Sharpest</option>
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="name">Name</option>
+          <option value="random">Random</option>
+        </select>
+        <!-- The action bar (tag / detect / segment / dataset) only appears once
+             something is selected, so say how to select before that happens. -->
+        <span id="select-hint" class="select-hint">
+          tick a tile or shift-click to select · then tag, run a model, or build a dataset
+        </span>
+        <button type="button" class="btn btn-ghost btn-sm" id="select-page">Select page</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="select-none">Clear</button>
+      </div>
+    </div>
+
+    <div id="grid" class="asset-grid"></div>
+    <div id="grid-empty" class="empty-state hidden"></div>
+
+    <div class="pager">
+      <button type="button" class="btn btn-secondary btn-sm" id="page-prev">Previous</button>
+      <span id="page-label" class="mono">—</span>
+      <button type="button" class="btn btn-secondary btn-sm" id="page-next">Next</button>
+    </div>
+  </section>
+</main>
+
+<!-- ── Selection action bar ───────────────────────────────────────────── -->
+<div id="action-bar" class="action-bar hidden">
+  <span id="selection-count" class="selection-count">0 selected</span>
+  <div class="action-group">
+    <input type="text" id="tag-input" class="tag-input" placeholder="tag name…" />
+    <button type="button" class="btn btn-primary btn-sm" id="tag-add">Tag</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="tag-remove">Untag</button>
+  </div>
+  <div class="action-group">
+    <!-- Populated from /api/library/models: the server's allowlist, never a
+         free-text path — a model reference is unpickled when it loads. -->
+    <select id="annotate-model" class="select-sm wide" title="Model to run on the selection">
+      <option value="">default model</option>
+    </select>
+    <input type="text" id="annotate-prompts" class="tag-input" placeholder="fish, coral, diver" />
+    <button type="button" class="btn btn-secondary btn-sm" id="annotate-run">Detect</button>
+  </div>
+  <div class="action-group">
+    <input type="text" id="dataset-name" class="tag-input" placeholder="dataset name…" />
+    <button type="button" class="btn btn-primary btn-sm" id="dataset-create">Make dataset</button>
+  </div>
+  <button type="button" class="btn btn-ghost btn-sm" id="selection-clear">Deselect</button>
+</div>
+
+<!-- ── Asset detail ───────────────────────────────────────────────────── -->
+<div id="detail" class="modal hidden" role="dialog" aria-modal="true" aria-label="Asset detail">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel detail-panel">
+    <button type="button" class="modal-close" data-close aria-label="Close">&times;</button>
+    <div class="detail-body">
+      <div class="detail-stage">
+        <div class="detail-canvas-wrap">
+          <img id="detail-img" alt="" />
+          <svg id="detail-overlay" class="detail-overlay" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+          <div id="detail-boxes" class="detail-boxes"></div>
+        </div>
+        <div class="detail-strip">
+          <h4 class="detail-h4">Visually similar</h4>
+          <div id="detail-similar" class="similar-row"></div>
+        </div>
+      </div>
+      <aside class="detail-meta">
+        <h3 id="detail-name" class="detail-title">—</h3>
+        <p id="detail-uri" class="detail-uri mono"></p>
+        <div id="detail-quality" class="quality-block"></div>
+        <div id="detail-facts" class="fact-grid"></div>
+        <h4 class="detail-h4">Tags</h4>
+        <div id="detail-tags" class="chip-row"></div>
+        <h4 class="detail-h4">Detections</h4>
+        <div id="detail-dets" class="det-list"></div>
+        <div class="detail-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="detail-similar-search">Find similar</button>
+          <a id="detail-open" class="btn btn-secondary btn-sm" href="#" target="_blank" rel="noopener">Open full size</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- ── Collection info ───────────────────────────────────────────── -->
+<div id="collection-info" class="modal hidden" role="dialog" aria-modal="true" aria-label="Collection details">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel admin-panel">
+    <button type="button" class="modal-close" data-close aria-label="Close">&times;</button>
+    <div id="collection-info-body"></div>
+  </div>
+</div>
+
+<!-- ── Datasets drawer ────────────────────────────────────────────────── -->
+<div id="datasets" class="modal hidden" role="dialog" aria-modal="true" aria-label="Datasets">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel admin-panel">
+    <button type="button" class="modal-close" data-close aria-label="Close">&times;</button>
+    <h3 class="detail-title">Datasets</h3>
+    <p class="card-subtitle">
+      A dataset freezes a selection plus a train/val/test split. The default split keeps every
+      folder on one side of the line, so burst-shot frames cannot leak across it.
+    </p>
+    <div id="dataset-list" class="dataset-list"></div>
+    <h4 class="detail-h4">Recent exports</h4>
+    <div id="export-list" class="export-list"></div>
+  </div>
+</div>
+
+<div id="job-toast" class="job-toast hidden">
+  <div class="job-toast-head">
+    <span id="job-toast-title">Working…</span>
+    <button type="button" class="link-btn" id="job-cancel">Cancel</button>
+  </div>
+  <div class="progress-track"><div id="job-toast-fill" class="progress-fill" style="width:0%"></div></div>
+  <div id="job-toast-msg" class="job-toast-msg"></div>
+</div>
+
+{% endblock %}
+{% block page_scripts %}<script type="module" src="/static/library/app.js?v={{ asset_v }}"></script>{% endblock %}

@@ -1,0 +1,266 @@
+# =============================================================================
+# OceanFrame with Oracle — the multi-user stack
+# =============================================================================
+# Users, sessions and curation live in Oracle Free; the image library's derived
+# catalog stays in SQLite on the library volume. Modelled on CAT's
+# docker-compose.cat.yml, which has run this way in the field.
+#
+#   bash deploy/stack_up.sh                     any Docker host: writes .env, starts
+#                                               Oracle, the app and the evaluation worker
+#   docker compose -f docker-compose.stack.yml up -d --build          the same, by hand
+#   docker compose -f docker-compose.stack.yml \
+#                  -f docker-compose.stack.gpu.yml up -d --build      app on an NVIDIA GPU
+#   ... -f docker-compose.evaluation.gpu.yml                          evaluation worker on the GPU
+#   docker compose -f docker-compose.stack.yml --profile test \
+#                  run --rm test-oracle                               suite on Oracle
+#
+# On a Cloud Workstation, deploy/install_oceanframe.sh writes .env, points the
+# data at directories under $HOME (the only thing that survives a restart) and
+# starts this for you.
+#
+# Names are prefixed oceanframe-* and Oracle is published on loopback only, on
+# 1522, so the stack runs alongside a CAT install (database-oracle-free, 1521).
+# =============================================================================
+
+name: oceanframe-stack
+
+x-build: &build
+  context: .
+  target: ml
+  args:
+    UID: "${UID:-1000}"
+    GID: "${GID:-1000}"
+    BASE_IMAGE: "${BASE_IMAGE:-python:3.12-slim}"
+    # CPU torch wheels: CLIP similarity search without a GPU. The GPU overlay
+    # empties this to get the CUDA build.
+    TORCH_INDEX: "https://download.pytorch.org/whl/cpu"
+    HTTP_PROXY: "${HTTP_PROXY:-}"
+    HTTPS_PROXY: "${HTTPS_PROXY:-}"
+    NO_PROXY: "${NO_PROXY:-}"
+
+x-app-env: &app-env
+  APP_HOST: 0.0.0.0
+  APP_PORT: 8080
+  APP_KEEPALIVE: "${APP_KEEPALIVE:-650}"
+  OPEN_BROWSER: "0"
+  PYTHONUNBUFFERED: "1"
+
+  # ── Application database (Oracle) ───────────────────────────────────────
+  OCEANFRAME_DB_USER: "${APP_SCHEMA_NAME:-oceanframe}"
+  OCEANFRAME_DB_PASSWORD: "${APP_SCHEMA_PASSWORD:?Set APP_SCHEMA_PASSWORD in .env}"
+  OCEANFRAME_DB_DSN: "oceanframe-oracle:1521/${DB_SERVICE_NAME:-FREEPDB1}"
+  OCEANFRAME_DB_POOL_MAX: "${OCEANFRAME_DB_POOL_MAX:-12}"
+  OCEANFRAME_DB_POOL_WAIT_S: "${OCEANFRAME_DB_POOL_WAIT_S:-15}"
+  OCEANFRAME_REQUIRE_ORACLE: "on"
+
+  # ── Sign-in ─────────────────────────────────────────────────────────────
+  OCEANFRAME_AUTH: "${OCEANFRAME_AUTH:-on}"
+  OCEANFRAME_ADMIN_USERNAME: "${OCEANFRAME_ADMIN_USERNAME:-}"
+  OCEANFRAME_ADMIN_EMAIL: "${OCEANFRAME_ADMIN_EMAIL:-}"
+  OCEANFRAME_ADMIN_PASSWORD: "${OCEANFRAME_ADMIN_PASSWORD:-}"
+  OCEANFRAME_SESSION_HOURS: "${OCEANFRAME_SESSION_HOURS:-168}"
+  OCEANFRAME_SESSION_COOKIE_SECURE: "${OCEANFRAME_SESSION_COOKIE_SECURE:-false}"
+  OCEANFRAME_ORIGIN_CHECK: "${OCEANFRAME_ORIGIN_CHECK:-on}"
+  # Self-service accounts, as in CAT. New accounts start as SIGNUP_ROLE
+  # (curator or viewer); only an admin grants lead or admin.
+  OCEANFRAME_ALLOW_SIGNUP: "${OCEANFRAME_ALLOW_SIGNUP:-on}"
+  OCEANFRAME_SIGNUP_ROLE: "${OCEANFRAME_SIGNUP_ROLE:-curator}"
+  # Extra accounts made on first start: username:role:password, comma separated.
+  OCEANFRAME_STARTER_USERS: "${OCEANFRAME_STARTER_USERS:-}"
+
+  # ── Image library ───────────────────────────────────────────────────────
+  LIB_DATA_DIR: /data/library
+  LIB_MODEL_DIR: /models
+  LIB_SOURCE: "${LIB_SOURCE:-gs://nmfs_odp_pifsc/PIFSC/ESD/ARP/pifsc-ai-data-repository}"
+  LIB_EMBED_BACKEND: "${LIB_EMBED_BACKEND:-auto}"
+  LIB_GCS_ANONYMOUS: "${LIB_GCS_ANONYMOUS:-auto}"
+  LIB_YOLO_MODEL: "${LIB_YOLO_MODEL:-yolo11n.pt}"
+  LIB_SAM3_MODEL: "${LIB_SAM3_MODEL:-/models/sam3.pt}"
+  LIB_PATH_TAG_PATTERN: "${LIB_PATH_TAG_PATTERN:-}"
+  LIB_CRAWL_WORKERS: "${LIB_CRAWL_WORKERS:-8}"
+
+  # ── Curation ────────────────────────────────────────────────────────────
+  CURATION_EVAL_DIR: /data/library/curation_eval
+  CURATION_IMAGE_BUCKETS: "${CURATION_IMAGE_BUCKETS:-}"
+  CURATION_CREATE_ROLE: "${CURATION_CREATE_ROLE:-curator}"
+  # Development only: let imports read a CSV from inside the container.
+  CURATION_ALLOW_LOCAL_SOURCES: "${CURATION_ALLOW_LOCAL_SOURCES:-}"
+  # noaa-pacific = on first start, create "NOAA Pacific T3" and import the three
+  # PIFSC regions (~160 MB, ~800k points). Runs once per database.
+  CURATION_SEED: "${CURATION_SEED:-}"
+  CURATION_STARTER_DATA: "${CURATION_STARTER_DATA:-noaa-t3}"
+  # Published versions: where their manifests go (on the library volume), an
+  # optional gs:// copy, and how new items are split train/val/test.
+  CURATION_VERSIONS_DIR: /data/library/curation_versions
+  CURATION_PUBLISH_URI: "${CURATION_PUBLISH_URI:-}"
+  CURATION_SPLIT_RATIOS: "${CURATION_SPLIT_RATIOS:-0.8,0.1,0.1}"
+  CURATION_SPLIT_SEED: "${CURATION_SPLIT_SEED:-42}"
+  # Hugging Face registry and evaluation staging (blank = built-in default).
+  CURATION_HF_ALLOWED_ORGS: "${CURATION_HF_ALLOWED_ORGS:-}"
+  CURATION_HF_ENDPOINT: "${CURATION_HF_ENDPOINT:-https://huggingface.co}"
+  CURATION_HUB_CACHE: "${CURATION_HUB_CACHE:-/data/library/curation_eval/hub}"
+  CURATION_HUB_MAX_BYTES: "${CURATION_HUB_MAX_BYTES:-}"
+  CURATION_EVAL_FETCH_WORKERS: "${CURATION_EVAL_FETCH_WORKERS:-}"
+  CURATION_EVAL_MAX_MISSING: "${CURATION_EVAL_MAX_MISSING:-}"
+  CURATION_PATCH_CACHE: "${CURATION_PATCH_CACHE:-}"
+  # Classifier checkpoints are pickles, loaded only inside the oceanframe-evaluation
+  # sandbox below (no network, read-only, no capabilities). Off unless .env turns it
+  # on (the deploy scripts do): any curator can upload a .pt, and uploads are not
+  # limited to CURATION_HF_ALLOWED_ORGS.
+  CURATION_TRUSTED_CHECKPOINTS: "${CURATION_TRUSTED_CHECKPOINTS:-off}"
+  CURATION_MODEL_MAX_BYTES: "${CURATION_MODEL_MAX_BYTES:-1073741824}"
+  CURATION_EVALUATION_SPOOL: /data/library/curation_eval/worker
+
+  # Outbound proxy, if the workstation has one (does not affect inbound access).
+  HTTP_PROXY: "${HTTP_PROXY:-}"
+  HTTPS_PROXY: "${HTTPS_PROXY:-}"
+  NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,oceanframe-oracle}"
+
+services:
+
+  # ── Oracle Free ───────────────────────────────────────────────────────────
+  oceanframe-oracle:
+    container_name: oceanframe-oracle
+    image: "gvenzl/oracle-free:${ORACLE_IMAGE_TAG:-23-slim}"
+    restart: unless-stopped
+    environment:
+      ORACLE_PASSWORD: "${ORACLE_PASSWORD:?Set ORACLE_PASSWORD in .env}"
+      # The image creates this schema user on first start, in FREEPDB1.
+      APP_USER: "${APP_SCHEMA_NAME:-oceanframe}"
+      APP_USER_PASSWORD: "${APP_SCHEMA_PASSWORD:?Set APP_SCHEMA_PASSWORD in .env}"
+    ports:
+      # Loopback only: the app reaches Oracle over the compose network; this is
+      # for an admin's SQL client and for backups, never for the outside.
+      - "127.0.0.1:${ORACLE_HOST_PORT:-1522}:1521"
+    volumes:
+      # A named volume by default; the workstation installer sets this to a
+      # directory under $HOME (owned by uid 54321, the image's oracle user).
+      - "${OCEANFRAME_ORACLE_DATA:-oceanframe-oracle-data}:/opt/oracle/oradata"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 100
+      start_period: 60s
+    networks: [oceanframe-net]
+
+  # ── The app ───────────────────────────────────────────────────────────────
+  oceanframe-app:
+    container_name: oceanframe-app
+    build: *build
+    image: oceanframe:ml
+    init: true
+    restart: unless-stopped
+    depends_on:
+      oceanframe-oracle:
+        condition: service_healthy
+    command: ["bash", "/app/docker-entrypoint.sh"]
+    environment: *app-env
+    ports:
+      # 8080 by default; the workstation installer sets 80, the port the Cloud
+      # Workstations "open port" button uses.
+      - "${OCEANFRAME_HOST_PORT:-8080}:8080"
+    volumes:
+      - "${OCEANFRAME_LIBRARY_DATA:-oceanframe-library}:/data/library"
+      - "${OCEANFRAME_MODELS:-./models}:/models"
+      - "${OCEANFRAME_UPLOADS:-oceanframe-uploads}:/app/uploads"
+      # The evaluation worker's spool: the app writes tasks to inputs and reads
+      # results and the worker's heartbeat from outputs.
+      - "${OCEANFRAME_EVAL_INPUTS:-oceanframe-eval-inputs}:/data/library/curation_eval/worker/inputs"
+      - "${OCEANFRAME_EVAL_OUTPUTS:-oceanframe-eval-outputs}:/data/library/curation_eval/worker/outputs"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # Covers waiting for the database and the first schema bootstrap.
+      start_period: 120s
+    networks: [oceanframe-net]
+
+  # ── Evaluation worker ─────────────────────────────────────────────────────
+  # Validates classifier checkpoints and scores published versions. It is the
+  # only place a .pt is unpickled, so it runs with no network, a read-only root
+  # and no capabilities; it sees only the spool. The GPU overlay for it is
+  # docker-compose.evaluation.gpu.yml.
+  oceanframe-evaluation:
+    container_name: oceanframe-evaluation
+    build:
+      context: .
+      target: evaluation-worker
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+        BASE_IMAGE: "${BASE_IMAGE:-python:3.12-slim}"
+        TORCH_INDEX: "${EVALUATION_TORCH_INDEX:-https://download.pytorch.org/whl/cpu}"
+        HTTP_PROXY: "${HTTP_PROXY:-}"
+        HTTPS_PROXY: "${HTTPS_PROXY:-}"
+    image: oceanframe:evaluation
+    init: true
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    cpus: "${EVALUATION_CPUS:-2}"
+    mem_limit: "${EVALUATION_MEMORY:-8g}"
+    shm_size: 512m
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=512m,mode=1777
+    environment:
+      CURATION_TRUSTED_CHECKPOINTS: "${CURATION_TRUSTED_CHECKPOINTS:-off}"
+      YOLO_CONFIG_DIR: /tmp/ultralytics
+      MPLCONFIGDIR: /tmp/matplotlib
+      HOME: /tmp
+    volumes:
+      - "${OCEANFRAME_EVAL_INPUTS:-oceanframe-eval-inputs}:/inputs:ro"
+      - "${OCEANFRAME_EVAL_OUTPUTS:-oceanframe-eval-outputs}:/outputs"
+
+  # ── The suites that touch the application database, on Oracle ────────────
+  # Its own throwaway Oracle — never the stack's: every test drops and
+  # recreates the schema, which against the real database would erase every
+  # user and every curation decision.
+  oceanframe-oracle-test:
+    profiles: ["test"]
+    image: "gvenzl/oracle-free:${ORACLE_IMAGE_TAG:-23-slim}"
+    environment:
+      ORACLE_PASSWORD: OceanframeTest1
+      APP_USER: oftest
+      APP_USER_PASSWORD: OceanframeTest1
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
+    networks: [oceanframe-net]
+
+  test-oracle:
+    profiles: ["test"]
+    build: *build
+    image: oceanframe:ml
+    depends_on:
+      oceanframe-oracle-test:
+        condition: service_healthy
+    environment:
+      LIB_DATA_DIR: /tmp/library
+      OCEANFRAME_TEST_DB_URL: "oracle+oracledb://oftest:OceanframeTest1@oceanframe-oracle-test:1521/?service_name=FREEPDB1"
+    # Test dependencies are installed at run time so they never reach the image.
+    command: >-
+      sh -c "pip install --quiet --no-cache-dir --user -r requirements-dev.txt &&
+      python -m pytest -q tests/test_auth.py tests/test_curation.py tests/test_editing.py tests/test_oasis_import.py
+      tests/test_versions.py tests/test_evaluations.py tests/test_appdb_backend.py
+      tests/test_registry.py tests/test_hub_evaluation.py tests/test_breakdown.py
+      tests/test_version_compare.py tests/test_collab_schema.py tests/test_members.py tests/test_change_sets.py tests/test_people_compare.py tests/test_project_compare.py tests/test_releases.py tests/test_availability.py tests/test_starter_data.py"
+    networks: [oceanframe-net]
+
+volumes:
+  oceanframe-oracle-data:
+  oceanframe-library:
+  oceanframe-uploads:
+  oceanframe-eval-inputs:
+  oceanframe-eval-outputs:
+
+networks:
+  oceanframe-net:
+    name: oceanframe-net

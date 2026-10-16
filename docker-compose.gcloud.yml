@@ -1,0 +1,23 @@
+# Optional overlay: give the container your host's Application Default
+# Credentials, for reading a *private* bucket.
+#
+#     docker compose -f docker-compose.yml -f docker-compose.gcloud.yml up -d
+#
+# Public buckets need none of this — the library falls back to an anonymous
+# client, which is why this is a separate file rather than a mount in the main
+# compose file: binding a possibly-missing ~/.config/gcloud makes Docker create
+# it as a root-owned directory on your host.
+#
+# Run `gcloud auth application-default login` first.
+services:
+  app:
+    volumes:
+      - ${HOME}/.config/gcloud:/home/oceanframe/.config/gcloud:ro
+    environment:
+      LIB_GCS_ANONYMOUS: "no"
+
+  app-ml:
+    volumes:
+      - ${HOME}/.config/gcloud:/home/oceanframe/.config/gcloud:ro
+    environment:
+      LIB_GCS_ANONYMOUS: "no"

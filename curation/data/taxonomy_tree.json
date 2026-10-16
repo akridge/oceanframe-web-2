@@ -1,0 +1,1988 @@
+{
+  "tier": "TIER0",
+  "name": "TIER 0",
+  "children": [
+    {
+      "tier": "TIER_1",
+      "name": "CORAL - Coral",
+      "children": [
+        {
+          "tier": "TIER_2",
+          "name": "ENC - Encrusting hard coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "ACAS - Acanthastrea sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ACAS - Acanthastrea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ACAS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "ASSP - Astreopora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ASSP - Astreopora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ASSP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "COSP - Coscinaraea sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "COSP - Coscinaraea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "COSP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "CYPS - Cyphastrea sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "CYPS - Cyphastrea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "CYPS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "ECHL - Echinophyllia sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ECHL - Echinophyllia sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ECHL"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "ECHP - Echinopora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ECHP - Echinopora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ECHP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "ENC - Encrusting hard coral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ENC - Encrusting hard coral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ENC"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "GASP - Galaxea sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "GASP - Galaxea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "GASP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "GOAL - Goniopora/Alveopora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "GOAL - Goniopora/Alveopora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "GOAL"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "ISSP - Isopora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ISSP - Isopora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ISSP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "LEPT - Leptastrea sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "LEPT - Leptastrea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "LEPT"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "LESP - Leptoseris sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "LESP - Leptoseris sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "LESP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "MOSP - Montipora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "MOEN - Montipora encrusting",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "MOEN"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PAVS - Pavona sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PAEN - Pavona encrusting",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PAEN"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PHSP - Phymastrea sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PHSP - Phymastrea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PHSP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "POSP - Porites sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "POEN - Porites encrusting",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "POEN"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PSSP - Psammocora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PSSP - Psammocora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PSSP"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "BR - Branching hard coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "ACSP - Acropora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ACBR - Acropora branching",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ACBR"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "BR - Branching hard coral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "BR - Branching hard coral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "BR"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "EUSP - Euphyllia sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "EUSP - Euphyllia sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "EUSP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "MOSP - Montipora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "MOBR - Montipora branching",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "MOBR"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PLER - Plerogyra sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PLER - Plerogyra sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PLER"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "POSP - Porites sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "POBR - Porites branching",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "POBR"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "POCS - Pocillopora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "POCS - Pocillopora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "POCS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "STYS - Stylophora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "STYS - Stylophora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "STYS"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "TAB - Tabulate hard coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "ACSP - Acropora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ACTA - Acropora tabulate",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ACTA"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "MASS - Massive hard coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "ASTS - Astrea spp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ASTS - Astrea spp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ASTS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "DISP - Diploastrea sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "DISP - Diploastrea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "DISP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "FASP - Favia sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "FASP - Favia sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "FASP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "FAVS - Favites sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "FAVS - Favites sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "FAVS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "GONS - Goniastrea sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "GONS - Goniastrea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "GONS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "HYSP - Hydnophora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "HYSP - Hydnophora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "HYSP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "LOBS - Lobophyllia sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "LOBS - Lobophyllia sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "LOBS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "LPHY - Leptoria sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "LPHY - Leptoria sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "LPHY"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "MASS - Massive hard coral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "MASS - Massive hard coral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "MASS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "MONS - Montastraea sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "MONS - Montastraea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "MONS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "OUSP - Oulophyllia sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "OUSP - Oulophyllia sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "OUSP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PAVS - Pavona sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PAMA - Pavona massive",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PAMA"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PLSP - Platygyra sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PLSP - Platygyra sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PLSP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "POSP - Porites sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "POMA - Porites massive",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "POMA"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "SYSP - Symphyllia sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "SYSP - Symphyllia sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "SYSP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "LOSY - Lobophyllia/Symphyllia sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "LOSY - Lobophyllia/Symphyllia sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "LOSY"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PLLE - Platygyra/Leptoria sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PLLE - Platygyra/Leptoria sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PLLE"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "COL - Columnar hard coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "COL - Columnar hard coral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "COL - Columnar hard coral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "COL"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "FOL - Foliose hard coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "FOL - Foliose hard coral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "FOL - Foliose hard coral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "FOL"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "MESP - Merulina sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "MESP - Merulina sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "MESP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "MOSP - Montipora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "MOFO - Montipora foliose",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "MOFO"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PACS - Pachyseris sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PACS - Pachyseris sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PACS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PAVS - Pavona sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PAFO - Pavona foliose",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PAFO"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "POSP - Porites sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "POFO - Porites foliose",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "POFO"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "TURS - Turbinaria sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "TURS - Turbinaria sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "TURS"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "FREE - Free-living hard coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "FREE - Free-living hard coral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "FREE - Free-living hard coral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "FREE"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "FUSP - Fungia sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "FUSP - Fungia sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "FUSP"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "NS - Non-scleractinian hard coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "HCOE - Heliopora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "HCOE - Heliopora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "HCOE"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "HYCO - Hydrocoral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "HYCO - Hydrocoral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "HYCO"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "MISP - Millepora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "MISP - Millepora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "MISP"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "CORAL - Hard coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "MOSP - Montipora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "MONE - non-encrusting Montipora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "MONE"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PAVS - Pavona sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PAVS - Pavona sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PAVS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "POSP - Porites sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PONM - non-massive Porites sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PONM"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "NS - Non-scleractinian hard coral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "NS - Non-scleractinian hard coral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "NS"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tier": "TIER_1",
+      "name": "I - Sessile Invertebrate",
+      "children": [
+        {
+          "tier": "TIER_2",
+          "name": "AMNE - Anemone",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "AMNE - Anemone",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "AMNE - Anemone",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "AMNE"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "BI - Bivalve",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "BI - Bivalve",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "BI - Bivalve",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "BI"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "BRY - Bryozoan",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "BRY - Bryozoan",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "BRY - Bryozoan",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "BRY"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "CMOR - Corallimorph",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "CMOR - Corallimorph",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "CMOR - Corallimorph",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "CMOR"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "GC - Giant clam",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "GC - Giant clam",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "GC - Giant clam",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "GC"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "SP - Sponge",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "SP - Sponge",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "SP - Sponge",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "SP"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "TUN - Tunicate",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "TUN - Tunicate",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "TUN - Tunicate",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "TUN"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "UI - Unclassified sessile invertebrate",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "UI - Unclassified sessile invertebrate",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "UI - Unclassified sessile invertebrate",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "UI"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "ZO - Zoanthid",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "ZO - Zoanthid",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ZO - Zoanthid",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ZO"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "ANTI - Wire and black coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "ANTI - Wire and black coral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ANTI - Wire and black coral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ANTI"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tier": "TIER_1",
+      "name": "MA - Macroalga",
+      "children": [
+        {
+          "tier": "TIER_2",
+          "name": "UPMA - Upright macroalga",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "ASPP - Asparagopsis sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "ASPP - Asparagopsis sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ASPP"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "GRMA - Green macroalga",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "AVSP - Avrainvillea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "AVSP"
+                    }
+                  ]
+                },
+                {
+                  "tier": "TIER_3",
+                  "name": "CAUL - Caulerpa sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "CAUL"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "BGMA - Blue-green macroalga",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "BGMA - Blue-green macroalga",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "BGMA"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "BRMA - Brown macroalgae",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "BRMA - Brown macroalgae",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "BRMA"
+                    }
+                  ]
+                },
+                {
+                  "tier": "TIER_3",
+                  "name": "DICO - Dictyopteris/Dictyota",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "DICO"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "DICT - Dictyosphaeria sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "DICT - Dictyosphaeria sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "DICT"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "GRMA - Green macroalgae",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "GRMA - Green macroalgae",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "GRMA"
+                    }
+                  ]
+                },
+                {
+                  "tier": "TIER_3",
+                  "name": "NEOM - Neomeris sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "NEOM"
+                    }
+                  ]
+                },
+                {
+                  "tier": "TIER_3",
+                  "name": "BOOD - Boodlea sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "BOOD"
+                    }
+                  ]
+                },
+                {
+                  "tier": "TIER_3",
+                  "name": "CHLS - Chlorodesmis sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "CHLS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "HALI - Halimeda sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "HALI - Halimeda sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "HALI"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "LOBO - Lobophora sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "LOBO - Lobophora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "LOBO"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "MICR - Microdictyon sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "MICR - Microdictyon sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "MICR"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PADI - Padina sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PADI - Padina sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PADI"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "RDMA - Red macroalgae",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "RDMA - Red macroalgae",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "RDMA"
+                    }
+                  ]
+                },
+                {
+                  "tier": "TIER_3",
+                  "name": "ACPH - Acanthophora sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "ACPH"
+                    }
+                  ]
+                },
+                {
+                  "tier": "TIER_3",
+                  "name": "AMSP - Amansia sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "AMSP"
+                    }
+                  ]
+                },
+                {
+                  "tier": "TIER_3",
+                  "name": "GALS - Galaxaura sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "GALS"
+                    }
+                  ]
+                },
+                {
+                  "tier": "TIER_3",
+                  "name": "GALI - Ganonema/Liagora",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "GALI"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "SG - Seagrass",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "SG - Seagrass",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "SG"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "UPMA - Upright macroalga",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "UPMA - Upright macroalga",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "UPMA"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "EMA - Encrusting macroalga",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "EMA - Encrusting macroalga",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "EMA - Encrusting macroalga",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "EMA"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "PESP - Peyssonnelia sp",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "PESP - Peyssonnelia sp",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "PESP"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tier": "TIER_1",
+      "name": "CCA - Coralline Alga",
+      "children": [
+        {
+          "tier": "TIER_2",
+          "name": "CCAH - CCA growing on hard substrate",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "CCA - Coralline Alga",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "CCAH - CCA growing on hard substrate",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "CCAH"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "CCAR - CCA growing on rubble",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "CCA - Coralline Alga",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "CCAR - CCA growing on rubble",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "CCAR"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tier": "TIER_1",
+      "name": "TURF - Turf Alga",
+      "children": [
+        {
+          "tier": "TIER_2",
+          "name": "HARD - Hard substrate",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "COTS - COTS predation",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "COTS - COTS predation",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "COTS"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": "TIER_2b",
+              "name": "HARD - Hard substrate",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "HARD - Hard substrate",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "HARD"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "RUB - Rubble substrate",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "RUB - Rubble substrate",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "RUB - Rubble substrate",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "RUB"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "TURFH - Turf growing on hard substrate",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "TURF - Turf Alga",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "TURFH - Turf growing on hard substrate",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "TURFH"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "TURFR - Turf growing on rubble",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "TURF - Turf Alga",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "TURFR - Turf growing on rubble",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "TURFR"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tier": "TIER_1",
+      "name": "SED - Sediment",
+      "children": [
+        {
+          "tier": "TIER_2",
+          "name": "FINE - Fine sediment",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "FINE - Fine sediment",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "FINE - Fine sediment",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "FINE"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "SAND - Sand",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "SAND - Sand",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "SAND - Sand",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "SAND"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tier": "TIER_1",
+      "name": "MF - Mobile Fauna",
+      "children": [
+        {
+          "tier": "TIER_2",
+          "name": "MOBF - Mobile fauna",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "MOBF - Mobile fauna",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "MOBF - Mobile fauna",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "MOBF"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tier": "TIER_1",
+      "name": "SC - Soft Coral",
+      "children": [
+        {
+          "tier": "TIER_2",
+          "name": "OCTO - Octocoral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "OCTO - Octocoral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "OCTO - Octocoral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "OCTO"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "USC - Unclassified soft coral",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "USC - Unclassified soft coral",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "USC - Unclassified soft coral",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "USC"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tier": "TIER_1",
+      "name": "UC - Unclassified",
+      "children": [
+        {
+          "tier": "TIER_2",
+          "name": "SHAD - Shadow",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "SHAD - Shadow",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "SHAD - Shadow",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "SHAD"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "UNK - Unclassified/Unknown",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "UNK - Unclassified/Unknown",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "UNK - Unclassified/Unknown",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "UNK"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tier": "TIER_1",
+      "name": "TW - Tape and wand",
+      "children": [
+        {
+          "tier": "TIER_2",
+          "name": "TAPE - Tape",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "TAPE - Tape",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "TAPE - Tape",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "TAPE"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tier": "TIER_2",
+          "name": "WAND - Wand",
+          "children": [
+            {
+              "tier": "TIER_2b",
+              "name": "WAND - Wand",
+              "children": [
+                {
+                  "tier": "TIER_3",
+                  "name": "WAND - Wand",
+                  "children": [
+                    {
+                      "tier": "CODE",
+                      "name": "WAND"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

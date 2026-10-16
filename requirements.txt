@@ -1,0 +1,23 @@
+# ── Core app (frame analyser + image library) ─────────────────────────────────
+fastapi>=0.111            # API framework for upload, stream, export, library routes
+uvicorn[standard]>=0.29   # ASGI server used to run the FastAPI app
+python-multipart>=0.0.9   # Handles multipart/form-data file uploads
+jinja2>=3.1               # Server-side HTML template rendering
+opencv-python-headless>=4.9  # Video decode, frame reads, image processing (no GUI/libGL)
+numpy>=1.26               # Numeric arrays, frame math, and vector search
+Pillow>=10.3              # Thumbnail/image encode and resize helpers
+piexif>=1.1               # Optional EXIF metadata embedding on JPEG export
+pydantic>=2.6             # Request body validation for the library API
+defusedxml>=0.7           # Safe parsing of NOAA InPort metadata XML
+
+# ── Image library: Google Cloud Storage source ───────────────────────────────
+google-cloud-storage>=2.16  # Lists and reads gs:// objects using ADC
+
+# ── Application database: users, sessions, curation ───────────────────────────
+sqlalchemy>=2.0.30        # One ORM layer over Oracle (the stack) and SQLite (local/tests)
+oracledb>=2.4             # Oracle driver; thin mode, so no Instant Client in the image
+bcrypt>=4.1               # Password hashing for logins
+
+# Hugging Face registry (curation/huggingface.py): metadata, pinned downloads, parquet rows.
+huggingface_hub>=0.34,<2
+pyarrow>=16

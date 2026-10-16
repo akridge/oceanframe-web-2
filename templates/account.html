@@ -1,0 +1,40 @@
+{% set active = 'account' %}
+{% extends "base.html" %}
+{% block title %}Account — OceanFrame{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="/static/auth.css?v={{ asset_v }}" />{% endblock %}
+{% block topbar %}<span class="topbar-title">Account</span>{% endblock %}
+{% block content %}
+<div class="auth-shell auth-shell-wide">
+  <p class="auth-error" id="account-off" hidden>Login is switched off on this deployment, so there is no account to manage.</p>
+
+  <section class="card auth-card" id="profile-card">
+    <div class="card-header"><h2 class="card-title">Profile</h2>
+      <span class="text-muted text-sm" id="profile-who"></span></div>
+    <form class="card-body auth-form" id="profile-form">
+      <label class="form-label" for="display_name">Display name <span class="text-muted">— shown on everything you curate</span></label>
+      <input class="auth-input" id="display_name" name="display_name" maxlength="120" />
+      <label class="form-label" for="initials">Initials</label>
+      <input class="auth-input" id="initials" name="initials" maxlength="10" />
+      <label class="form-label" for="email">Email</label>
+      <input class="auth-input" id="email" name="email" type="email" maxlength="255" />
+      <p class="auth-status" id="profile-status" role="status"></p>
+      <button class="btn btn-primary" type="submit">Save profile</button>
+    </form>
+  </section>
+
+  <section class="card auth-card" id="password-card">
+    <div class="card-header"><h2 class="card-title">Change password</h2></div>
+    <form class="card-body auth-form" id="password-form">
+      <label class="form-label" for="old_password">Current password</label>
+      <input class="auth-input" id="old_password" type="password" autocomplete="current-password" required />
+      <label class="form-label" for="new_password">New password <span class="text-muted">— at least 8 characters</span></label>
+      <input class="auth-input" id="new_password" type="password" autocomplete="new-password" minlength="8" required />
+      <p class="auth-status" id="password-status" role="status"></p>
+      <button class="btn btn-primary" type="submit">Change password</button>
+      <p class="text-muted text-sm">Changing it signs you out everywhere else.</p>
+    </form>
+  </section>
+</div>
+{% endblock %}
+{% block page_scripts %}<script type="module" src="/static/auth/account.js?v={{ asset_v }}"></script>{% endblock %}

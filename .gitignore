@@ -1,0 +1,37 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
+uploads/*
+!uploads/.gitkeep
+uploads/thumbs/*
+!uploads/thumbs/.gitkeep
+# Model weights are large and often licence-gated — keep them out of git.
+models/*
+*.pt
+!models/README.md
+library_data/
+
+# Local compose configuration (ports, uid/gid, source, model)
+.env
+# Backups and copies of it (.env.bak-*, ".env copy") hold the same secrets.
+.env*
+!.env.example
+
+# Reference copies of other projects (CAT, OASIS) used while porting.
+# They contain real .env files, nested repos, model weights and large data.
+examples/
+
+# Brainstorm companion mockups
+.superpowers/brainstorm/
+
+# Browser checks: keep the scripts and notes, never their output.
+tests/browser/*
+!tests/browser/*.py
+!tests/browser/*.md

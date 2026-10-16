@@ -1,0 +1,49 @@
+# Build context hygiene.  Keep this tight: every megabyte here is copied on each
+# build and slows the layer cache down.
+
+.git/
+.github/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.vscode/
+.idea/
+*.log
+
+# Runtime state — the container gets its own volumes for these.
+uploads/*
+!uploads/.gitkeep
+uploads/thumbs/*
+!uploads/thumbs/.gitkeep
+library_data/
+
+# Model weights are mounted in at /models, never baked into the image.
+models/*
+!models/README.md
+*.pt
+
+# Screenshots are for the repo, not the runtime.
+docs/images/
+
+# Local compose overrides and secrets.
+.env
+.env*
+oasis/
+docker-compose.override.yml
+
+# NOTE: tests/ is deliberately NOT ignored. The `test` and `test-live` compose
+# services run the suites inside the image, which is the whole point of being
+# able to check a change without a local Python environment.
+
+# Reference copies of other projects used while porting (CAT, OASIS). They hold
+# real .env files, nested repos and large data — never part of the image.
+examples/
+
+# Workstation deployment state and backups.
+backups/
+oracle-data/

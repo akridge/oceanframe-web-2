@@ -1,0 +1,832 @@
+{% set active = 'curation' %}
+{% extends "base.html" %}
+{% block title %}Classification Curation — OceanFrame{% endblock %}
+{% block body_class %}curation-body{% endblock %}
+{% block body_attrs %}data-create-role="{{ create_role }}"{% endblock %}
+{% block page_css %}
+  <link rel="stylesheet" href="/static/curation.css?v={{ asset_v }}" />
+{% endblock %}
+{% block topbar %}
+  <label class="project-picker" title="Curation project">
+    <i class="bi bi-database" aria-hidden="true"></i>
+    <select id="project-select" class="form-select" aria-label="Curation project"></select>
+  </label>
+  <span id="dataset-mode-badge" class="badge text-bg-light">T3</span>
+  {% if app_db == "sqlite" %}<span id="app-db-badge" class="badge text-bg-warning" title="Local SQLite database — not shared. Curation is being saved to a SQLite file on this server, not the shared Oracle database. Start the app with make up, or set OCEANFRAME_DB_USER and OCEANFRAME_DB_DSN.">Local SQLite</span>{% endif %}
+  <nav class="tabs curation-view-tabs" role="group" aria-label="Dataset view">
+    <button id="source-view-button" class="btn btn-sm" type="button" title="Source images"><i class="bi bi-bounding-box"></i><span class="tab-label">Source images</span></button>
+    <button id="crop-view-button" class="btn btn-sm" type="button" title="Crop grid"><i class="bi bi-grid-3x3-gap"></i><span class="tab-label">Crop grid</span></button>
+    <button id="quality-view-button" class="btn btn-sm" type="button" title="Quality review"><i class="bi bi-eye"></i><span class="tab-label">Quality review</span></button>
+    <button id="status-view-button" class="btn btn-sm" type="button" title="Dataset status"><i class="bi bi-bar-chart"></i><span class="tab-label">Dataset status</span></button>
+    <button id="matrix-view-button" class="btn btn-sm active" type="button" title="Confusion matrix"><i class="bi bi-grid"></i><span class="tab-label">Confusion matrix</span></button>
+    <button id="versions-view-button" class="btn btn-sm" type="button" title="Versions"><i class="bi bi-layers"></i><span class="tab-label">Versions</span></button>
+  </nav>
+  <div class="topbar-actions">
+    <button id="commit-pill" class="btn btn-sm btn-warning d-none" type="button" title="Group your changes under a message"></button>
+    <button id="topbar-more" class="btn btn-sm" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="topbar-more-menu" aria-label="Project actions" title="Project actions: import, new project, registry, members, releases, delete">
+      <i class="bi bi-three-dots" aria-hidden="true"></i><span class="more-label">Project</span>
+    </button>
+  </div>
+{% endblock %}
+{% block content %}
+<!-- Project-level actions live in this menu (opened by #topbar-more), so the top bar never has to squeeze the view tabs. -->
+<div id="topbar-more-menu" class="topbar-more-menu" role="menu" aria-label="Project actions" hidden>
+  <button id="import-noaa-button" class="btn btn-sm menu-item" role="menuitem" type="button" data-min-role="project-curator" title="Import the configured regional annotation CSVs">
+    <i class="bi bi-cloud-arrow-down"></i><span class="action-label">Import regions</span>
+  </button>
+  <button id="new-project-button" class="btn btn-sm menu-item" role="menuitem" type="button" data-min-role="create" title="Create project">
+    <i class="bi bi-plus-lg"></i><span class="action-label">New project</span>
+  </button>
+  <button id="hub-registry-button" class="btn btn-sm menu-item" role="menuitem" type="button" title="Hugging Face datasets and models registered here">
+    <i class="bi bi-collection"></i><span class="action-label">Registry</span>
+  </button>
+  <div class="menu-sep" role="separator"></div>
+  <button id="members-button" class="btn btn-sm menu-item" role="menuitem" type="button" title="Who works on this project"><i class="bi bi-people"></i><span class="action-label">Members</span></button>
+  <button id="releases-button" class="btn btn-sm menu-item" role="menuitem" type="button" title="Combined releases and project comparison"><i class="bi bi-box-seam"></i><span class="action-label">Releases</span></button>
+  <div class="menu-sep" role="separator"></div>
+  <button id="delete-project-button" class="btn btn-sm icon-button menu-item menu-item-danger" role="menuitem" type="button" data-min-role="lead" title="Delete active project">
+    <i class="bi bi-trash"></i><span class="action-label">Delete project…</span>
+  </button>
+</div>
+<div class="curation-shell" id="curation-app">
+  <div class="filter-bar">
+    <button id="filters-button" class="btn btn-sm" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="filters-popover"><i class="bi bi-funnel"></i> Filters</button>
+    <div id="filter-chips" class="filter-chip-row" role="group" aria-label="Active filters"></div>
+    <span id="filter-count" class="filter-count" aria-live="polite"></span>
+    <p class="curation-owner" id="project-owner"></p>
+    <div class="export-controls">
+      <select id="export-format" class="form-select form-select-sm" aria-label="Export format">
+        <option value="csv">CSV</option>
+        <option value="jsonl">JSONL</option>
+      </select>
+      <button id="export-button" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-download"></i> Export filtered</button>
+    </div>
+  </div>
+
+  <div id="filters-popover" class="filters-popover" role="dialog" aria-label="Filters" hidden>
+    <section class="curation-toolbar" aria-label="Queue filters">
+      <span class="filters-heading">Search</span>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input id="filter-image" class="form-control" placeholder="Image or site" aria-label="Image or site">
+      </div>
+      <div class="filter-token-control">
+        <div class="input-group input-group-sm">
+          <input id="taxonomy-filter" class="form-control" list="taxonomy-options" placeholder="Find taxonomy group" aria-label="Taxonomy tier or class">
+          <datalist id="taxonomy-options"></datalist>
+          <button id="add-taxonomy" class="btn btn-outline-secondary" type="button" title="Add taxonomy filter"><i class="bi bi-plus-lg"></i></button>
+        </div>
+        <div id="taxonomy-chips" class="filter-chips"></div>
+      </div>
+      <div class="filter-token-control">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-tag"></i></span>
+          <input id="filter-label" class="form-control" list="code-options" placeholder="Add code(s)" aria-label="Class codes">
+          <datalist id="code-options"></datalist>
+          <button id="add-code" class="btn btn-outline-secondary" type="button" title="Add class code"><i class="bi bi-plus-lg"></i></button>
+        </div>
+        <div id="code-chips" class="filter-chips"></div>
+      </div>
+      <span class="filters-heading">Review</span>
+      <div class="filters-selects">
+        <select id="filter-state" class="form-select form-select-sm" aria-label="Review state">
+          <option value="">Any review state</option>
+          <option value="unreviewed">Unreviewed</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="flagged">Flagged</option>
+        </select>
+        <select id="filter-included" class="form-select form-select-sm" aria-label="Inclusion">
+          <option value="">Included or excluded</option>
+          <option value="true">Included</option>
+          <option value="false">Excluded</option>
+        </select>
+        <select id="filter-origin" class="form-select form-select-sm" aria-label="Label origin">
+          <option value="">Any label origin</option>
+          <option value="source">Matches source label</option>
+          <option value="classifier">Matches classifier</option>
+          <option value="curated">Curator override</option>
+        </select>
+      </div>
+    </section>
+    <section class="curation-facet-toolbar" aria-label="Metadata filters">
+      <span class="filters-heading">Survey</span>
+      <div class="filters-selects">
+        <select id="filter-region" class="form-select form-select-sm" aria-label="Region"><option value="">All regions</option></select>
+        <select id="filter-island" class="form-select form-select-sm" aria-label="Island"><option value="">All islands</option></select>
+        <select id="filter-year" class="form-select form-select-sm" aria-label="Year"><option value="">All years</option></select>
+        <select id="filter-site" class="form-select form-select-sm" aria-label="Site"><option value="">All sites</option></select>
+        <select id="filter-annotator" class="form-select form-select-sm" aria-label="Annotator"><option value="">All annotators</option></select>
+      </div>
+      <div class="filters-checks">
+        <label class="form-check form-check-inline small mb-0"><input id="filter-hide-missing" class="form-check-input" type="checkbox" checked> Hide missing images</label>
+        <label class="form-check form-check-inline small mb-0"><input id="filter-show-removed" class="form-check-input" type="checkbox"> Show removed</label>
+      </div>
+    </section>
+    <div class="filters-actions">
+      <button id="clear-filters" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-x-circle"></i> Clear</button>
+      <button id="apply-filters" class="btn btn-sm btn-primary" type="button">
+        <i class="bi bi-funnel"></i><span>Apply</span>
+      </button>
+    </div>
+  </div>
+  <!-- /filters-popover -->
+
+  <div id="membership-notice" class="alert alert-info py-2 small d-none" role="status"></div>
+
+  <div id="curation-notice" class="curation-notice d-none" role="alert">
+    <i class="bi bi-exclamation-triangle"></i><span id="curation-notice-text"></span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="curation-notice-close" aria-label="Dismiss"><i class="bi bi-x-lg"></i></button>
+  </div>
+
+  <section id="import-status" class="curation-import-status d-none" aria-live="polite">
+    <div>
+      <strong id="import-state">Import queued</strong>
+      <span id="import-source"></span>
+    </div>
+    <div class="import-counts">
+      <span><b id="import-processed">0</b> processed</span>
+      <span><b id="import-added">0</b> added</span>
+      <span><b id="import-skipped">0</b> existing</span>
+      <span><b id="import-rejected">0</b> rejected</span>
+    </div>
+    <button id="cancel-import" class="btn btn-sm btn-outline-danger" type="button" data-min-role="project-curator">Cancel</button>
+    <button id="resume-import" class="btn btn-sm btn-outline-primary d-none" type="button" data-min-role="project-curator" title="Read the dataset again; rows already imported are skipped">Resume import</button>
+  </section>
+
+  <section class="curation-metrics" aria-label="Dataset statistics">
+    <div><span id="metric-total">0</span><small>Total</small></div>
+    <div><span id="metric-included">0</span><small>Included</small></div>
+    <div><span id="metric-reviewed">0</span><small>Reviewed</small></div>
+    <div><span id="metric-flagged">0</span><small>Flagged</small></div>
+    <div class="curation-progress"><span id="metric-progress">0%</span><small>Review progress</small></div>
+  </section>
+
+  <div id="matrix-drilldown" class="matrix-drilldown d-none">
+    <span id="matrix-drilldown-text"></span>
+    <button id="clear-matrix-drilldown" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-x-lg"></i> Clear matrix filter</button>
+  </div>
+
+  <div id="empty-projects" class="curation-empty d-none">
+    <i class="bi bi-database-add"></i>
+    <h2>Create the first curation project</h2>
+    <p>A project holds the point annotations, everyone's review decisions and their history together.</p>
+    <button class="btn btn-primary" type="button" data-create-project data-min-role="create">Create project</button>
+    <p class="text-muted small" id="empty-projects-role" hidden>Ask someone with the {{ create_role }} role or higher to create one.</p>
+  </div>
+
+  <section id="quality-panel" class="quality-panel d-none" aria-label="Quality review panel">
+    <div class="quality-header">
+      <div>
+        <strong id="quality-heading">Patch quality review</strong>
+        <small id="quality-description">Review individual classification patches first. Patch decisions affect only that dataset item.</small>
+      </div>
+      <div class="quality-actions">
+        <select id="quality-filter" class="form-select form-select-sm" aria-label="Quality filter">
+          <option value="">All decisions</option>
+          <option value="accept">In dataset</option>
+          <option value="manual_review">Held</option>
+          <option value="reject">Excluded</option>
+          <option value="pending" selected>Not reviewed</option>
+        </select>
+        <select id="quality-signal-filter" class="form-select form-select-sm" aria-label="Quality signal filter">
+          <option value="">All signals</option>
+          <option value="clean">No threshold warnings</option>
+          <option value="blurry">Low sharpness</option>
+          <option value="too_dark">Too dark</option>
+          <option value="too_bright">Too bright</option>
+          <option value="low_contrast">Low contrast</option>
+          <option value="blue_cast">Strong blue cast</option>
+          <option value="washed_out">Clipped highlights</option>
+          <option value="analysis_failed">Analysis failed</option>
+        </select>
+        <select id="quality-sort" class="form-select form-select-sm" aria-label="Quality result sort">
+          <option value="score_asc">Lowest score first</option>
+          <option value="score_desc">Highest score first</option>
+          <option value="sharpness_asc">Least sharp first</option>
+          <option value="brightness_asc">Darkest first</option>
+        </select>
+        <button id="quality-accept-all" class="btn btn-sm btn-outline-success" type="button" data-min-role="project-curator" title="Include every patch the quality check found usable">Include recommended</button>
+        <button id="quality-reject-all" class="btn btn-sm btn-outline-danger" type="button" data-min-role="project-curator" title="Exclude every patch the quality check recommends rejecting">Exclude recommended</button>
+      </div>
+    </div>
+    <div class="quality-scope-tabs" role="tablist" aria-label="Quality review level">
+      <button class="btn btn-sm active" type="button" role="tab" aria-selected="true" data-quality-scope="patch"><i class="bi bi-bounding-box"></i> 1. Patches</button>
+      <button class="btn btn-sm" type="button" role="tab" aria-selected="false" data-quality-scope="source"><i class="bi bi-image"></i> 2. Source images</button>
+    </div>
+    <div id="quality-progress" class="quality-progress" role="status" aria-live="polite">
+      <div class="quality-progress-copy"><strong id="quality-progress-label">Ready to analyze</strong><span id="quality-progress-count">0 / 0</span></div>
+      <div class="progress" aria-hidden="true"><div id="quality-progress-bar" class="progress-bar" style="width:0%"></div></div>
+    </div>
+    <div class="quality-method">
+      <span><i class="bi bi-activity"></i><b>Sharpness</b> edge detail, higher is sharper</span>
+      <span><i class="bi bi-brightness-high"></i><b>Brightness</b> mean luminance, 0–255</span>
+      <span><i class="bi bi-circle-half"></i><b>Contrast</b> luminance spread</span>
+      <span><i class="bi bi-palette"></i><b>Color cast</b> channel imbalance</span>
+      <span><i class="bi bi-sun"></i><b>Clipping</b> lost shadow/highlight detail</span>
+    </div>
+    <div class="quality-summary" id="quality-summary"></div>
+    <div id="quality-list" class="quality-list"></div>
+  </section>
+
+  <div id="back-bar" class="back-bar d-none"><button id="back-button" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-arrow-left"></i> <span id="back-label">Back</span></button></div>
+  <div id="curation-workspace" class="curation-workspace d-none">
+    <aside class="curation-queue" aria-label="Curation queue">
+      <div class="curation-panel-title">
+        <div><strong>Source images</strong><small id="queue-count">0 loaded</small></div>
+        <div class="queue-title-tools">
+          <button id="refresh-queue" class="btn btn-sm btn-outline-secondary icon-button" type="button" title="Refresh queue" aria-label="Refresh queue">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+          <button id="queue-toggle" class="btn btn-sm btn-outline-secondary icon-button" type="button" aria-expanded="true" aria-controls="queue-list" title="Collapse the queue" aria-label="Collapse the queue">
+            <i class="bi bi-chevron-bar-left"></i>
+          </button>
+        </div>
+      </div>
+      <div id="queue-list" class="curation-queue-list"></div>
+      <button id="load-more" class="btn btn-sm btn-outline-secondary w-100 d-none" type="button">Load more</button>
+    </aside>
+
+    <section class="curation-stage">
+      <div id="no-selection" class="curation-empty">
+        <i class="bi bi-crosshair"></i>
+        <h2>Select a crop to review</h2>
+      </div>
+      <div id="paired-view" class="paired-view d-none">
+        <figure class="source-figure">
+          <div class="media-heading">
+            <span>Source image <small id="source-location"></small></span>
+            <div id="point-legend" class="point-legend"></div>
+          </div>
+          <div class="source-image-wrap" id="source-image-wrap" tabindex="0">
+            <div id="source-scene" class="source-scene">
+              <img id="source-image" alt="Full source survey image">
+              <div id="source-markers" class="source-markers"></div>
+            </div>
+            <div id="source-missing-notice" class="source-missing-notice d-none" role="status"></div>
+            <div id="source-image-error" class="source-image-error d-none">
+              <i class="bi bi-cloud-slash"></i>
+              <strong>Source image unavailable</strong>
+              <span>This annotation exists in the CSV, but its image is not present in the published regional folder.</span>
+            </div>
+            <!-- On-canvas overlays: they keep pointer and wheel events to themselves (curation.js), so they never pan, zoom or add a point. -->
+            <div id="stage-toolbar" class="stage-overlay stage-toolbar image-view-tools" role="toolbar" aria-label="Image tools">
+              <select id="overlay-mode" class="form-select form-select-sm" aria-label="Overlay display">
+                <option value="patch" selected>Patch squares</option>
+                <option value="point">Points</option>
+              </select>
+              <button id="add-point-mode" class="btn btn-sm" type="button" data-min-role="project-curator" title="Add annotation point"><i class="bi bi-crosshair"></i><span class="tool-label">Add point</span></button>
+              <button id="bulk-add-button" type="button" class="btn btn-sm d-none" data-min-role="project-curator" title="Bulk add around the selected point"><i class="bi bi-grid-3x3"></i><span class="tool-label">Bulk add around…</span></button>
+              <span id="patch-only-label" class="badge text-bg-secondary d-none" title="A patch from a dataset: no source image coordinates to show or add points to">Patch only</span>
+              <span class="tool-sep" aria-hidden="true"></span>
+              <button id="zoom-out" class="btn btn-sm icon-button" type="button" title="Zoom out" aria-label="Zoom out"><i class="bi bi-zoom-out"></i></button>
+              <span id="zoom-level">100%</span>
+              <button id="zoom-in" class="btn btn-sm icon-button" type="button" title="Zoom in" aria-label="Zoom in"><i class="bi bi-zoom-in"></i></button>
+              <button id="fit-image" class="btn btn-sm icon-button" type="button" title="Fit image" aria-label="Fit image"><i class="bi bi-aspect-ratio"></i></button>
+              <button id="fullscreen-image" class="btn btn-sm icon-button" type="button" title="Full screen" aria-label="Full screen"><i class="bi bi-fullscreen"></i></button>
+            </div>
+            <nav id="stage-nav" class="stage-overlay stage-nav" aria-label="Step through the queue">
+              <button id="stage-prev" class="btn btn-sm icon-button" type="button" title="Previous image (Alt+←)" aria-label="Previous image"><i class="bi bi-chevron-left"></i></button>
+              <span id="stage-position" aria-live="polite">– / –</span>
+              <button id="stage-next" class="btn btn-sm icon-button" type="button" title="Next image (Alt+→)" aria-label="Next image"><i class="bi bi-chevron-right"></i></button>
+            </nav>
+            <section id="pending-tray" class="stage-overlay pending-tray d-none" aria-label="Unsaved edits">
+              <span class="pending-summary"><strong><span id="pending-count">0</span> <span class="pending-noun">unsaved edits</span></strong><span id="pending-breakdown" class="pending-breakdown"></span></span>
+              <button id="pending-review" class="btn btn-sm" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="pending-review-panel">Review</button>
+              <button id="pending-discard" class="btn btn-sm" type="button">Discard</button>
+              <button id="pending-save" class="btn btn-sm btn-primary text-nowrap" type="button">Save</button>
+              <p id="pending-message" class="small mt-1 mb-0" role="status"></p>
+            </section>
+            <!-- The Review popover: a sibling of the pill, so the pill's backdrop filter does not become its containing block. -->
+            <div id="pending-review-panel" class="pending-review-panel" role="dialog" aria-label="Unsaved edits on this image" hidden>
+              <div class="curation-panel-title"><div><strong>Unsaved edits</strong><small>Moves, resizes, removals and new patches on this image</small></div></div>
+              <div id="pending-list" class="pending-list"></div>
+              <input id="pending-reason" class="form-control form-control-sm" maxlength="4000" placeholder="Reason (optional)" aria-label="Reason for these edits">
+            </div>
+          </div>
+          <!-- /source-image-wrap -->
+        </figure>
+      </div>
+    </section>
+
+    <aside class="curation-inspector">
+      <div id="inspector-tabs" class="segmented inspector-tabs" role="tablist" aria-label="Inspector">
+        <button type="button" role="tab" class="active" aria-selected="true" aria-controls="inspector-point" data-inspector-tab="point"><i class="bi bi-crosshair" aria-hidden="true"></i> Point</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="inspector-image" data-inspector-tab="image"><i class="bi bi-image" aria-hidden="true"></i> Image</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="inspector-model" data-inspector-tab="model"><i class="bi bi-cpu" aria-hidden="true"></i> Model</button>
+      </div>
+      <div id="inspector-point" class="inspector-panel" role="tabpanel" aria-label="Point">
+      <div id="inspector-empty" class="curation-empty compact"><p>No item selected</p></div>
+      <form id="item-form" class="d-none">
+        <figure class="crop-figure">
+          <div class="media-heading"><span>224 x 224 crop</span><span id="crop-confidence"></span></div>
+          <div id="crop-preview-wrap" class="crop-preview-wrap">
+            <canvas id="crop-image" width="224" height="224" aria-label="Selected classification crop"></canvas>
+            <span id="crop-label" class="crop-label"></span>
+          </div>
+        </figure>
+        <div class="inspector-heading">
+          <div><span id="item-region"></span><strong id="item-name"></strong></div>
+          <span id="item-revision" class="badge text-bg-light"></span>
+        </div>
+        <p class="item-last-edit" id="item-last-edit"></p>
+        <label class="form-label" for="current-label">Current label</label>
+        <input id="current-label" class="form-control" list="code-options" required maxlength="100">
+        <p class="source-label">Source: <strong id="source-label"></strong></p>
+
+        <div id="point-edit-tools" class="point-edit-tools mb-3">
+          <label class="form-label small mb-0" for="point-edit-size">Patch size</label>
+          <div class="d-flex gap-1 align-items-center">
+            <input id="point-edit-size" class="form-control form-control-sm" type="number" min="32" max="1024" step="8" style="width:6rem" data-min-role="project-curator">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-point-preset="160" data-min-role="project-curator">160</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-point-preset="224" data-min-role="project-curator">224</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-point-preset="320" data-min-role="project-curator">320</button>
+          </div>
+          <div class="d-flex gap-1 mt-2">
+            <button id="point-remove" type="button" class="btn btn-sm btn-outline-danger" data-min-role="project-curator"><i class="bi bi-trash"></i> Remove</button>
+            <button id="point-restore" type="button" class="btn btn-sm btn-outline-success d-none" data-min-role="project-curator"><i class="bi bi-arrow-counterclockwise"></i> Restore</button>
+          </div>
+          <div id="bulk-add-form" class="bulk-add-form d-none">
+            <p class="bulk-add-heading">Bulk add around this point</p>
+            <div class="d-flex gap-2 align-items-end flex-wrap">
+              <label class="small" for="bulk-grid">Grid <select id="bulk-grid" class="form-select form-select-sm"><option value="3">3×3</option><option value="5">5×5</option></select></label>
+              <label class="small" for="bulk-spacing">Spacing px <input id="bulk-spacing" class="form-control form-control-sm" type="number" min="32" max="512" step="8" value="224" style="width:6rem"></label>
+              <label class="small" for="bulk-model">Model hints <select id="bulk-model" class="form-select form-select-sm"><option value="">None</option></select></label>
+              <button id="bulk-run" type="button" class="btn btn-sm btn-primary">Lay out</button>
+            </div>
+          </div>
+        </div>
+
+        <label class="form-label" for="review-state">Review state</label>
+        <select id="review-state" class="form-select">
+          <option value="unreviewed">Unreviewed</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="flagged">Flagged</option>
+        </select>
+
+        <div class="form-check form-switch my-3">
+          <input id="item-included" class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="item-included">Include in next version</label>
+        </div>
+
+        <label class="form-label" for="edit-reason">Reason</label>
+        <textarea id="edit-reason" class="form-control" rows="3" placeholder="Why is this changing?"></textarea>
+
+        <div id="prediction-list" class="prediction-list"></div>
+        <div id="save-message" class="small" role="status"></div>
+        <div class="save-row">
+          <button class="btn btn-primary" type="submit" data-min-role="project-curator">
+            <i class="bi bi-check2"></i><span>Save decision</span>
+          </button>
+          <button id="save-next" class="btn btn-outline-primary" type="button" data-min-role="project-curator" title="Save, then open the next point (Shift+Enter)">
+            <span>Save &amp; next</span><i class="bi bi-arrow-right"></i>
+          </button>
+        </div>
+        <p class="review-keys">Keys: <kbd>A</kbd> accept · <kbd>F</kbd> flag · <kbd>X</kbd> exclude · <kbd>R</kbd> relabel · <kbd>Shift</kbd>+<kbd>Enter</kbd> save &amp; next</p>
+      </form>
+      </div>
+      <!-- /inspector-point -->
+      <div id="inspector-image" class="inspector-panel d-none" role="tabpanel" aria-label="Image">
+        <dl id="image-facts" class="item-metadata image-facts"></dl>
+        <dl id="item-metadata" class="item-metadata"></dl>
+        <section id="annotation-table-panel" class="annotation-table-panel d-none">
+          <div class="curation-panel-title">
+            <div><strong>Image annotations</strong><small id="annotation-table-count">0 points</small></div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr><th>Point</th><th>Current</th><th>Source</th><th>Model</th><th>Confidence</th><th>State</th><th>Included</th><th>Annotator</th><th>Last change</th></tr></thead>
+              <tbody id="annotation-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      <div id="inspector-model" class="inspector-panel d-none" role="tabpanel" aria-label="Model">
+        <div id="model-context" class="model-context"></div>
+        <!-- The classify tools live here; while the add-point dialog is open they move into it (curation.js) and come back when it closes. -->
+        <div id="model-classify-slot" class="model-classify-slot">
+          <div id="classify-tools" class="classify-tools">
+            <p class="classify-heading">Classify <span id="classify-target">the selected point</span></p>
+            <div class="point-model-tools">
+              <select id="point-model" class="form-select form-select-sm" aria-label="Classification model"><option value="">Select classification model</option></select>
+              <input id="dense-radius" class="form-control form-control-sm" type="number" min="0" max="512" value="0" title="Neighborhood radius" aria-label="Neighborhood radius">
+              <input id="dense-step" class="form-control form-control-sm" type="number" min="16" max="512" value="112" title="Grid step" aria-label="Grid step">
+              <button id="classify-point" class="btn btn-sm btn-outline-primary" type="button" data-min-role="project-curator">Classify</button>
+            </div>
+            <small class="text-muted">Radius 0 scores one patch. Increase radius for a bounded nearby grid of up to 81 patches.</small>
+            <div id="classification-results" class="classification-results"></div>
+            <div id="point-message" class="small my-2" role="status"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <section id="crop-grid-panel" class="curation-crop-panel d-none">
+    <div class="curation-panel-title">
+      <div><strong>Dataset crops</strong><small id="crop-grid-count">0 loaded</small></div>
+      <div class="crop-bulk-tools">
+        <div class="crop-tool-group" role="group" aria-label="Crop selection tools">
+          <button id="select-page-crops" class="btn btn-sm btn-outline-secondary" type="button" title="Select every crop on this page">Select page</button>
+          <button id="select-visible-crops" class="btn btn-sm btn-outline-secondary" type="button">Select visible</button>
+          <button id="invert-visible-crops" class="btn btn-sm btn-outline-secondary" type="button">Invert</button>
+          <button id="clear-visible-crops" class="btn btn-sm btn-outline-secondary" type="button">Clear visible</button>
+          <button id="select-all-crops" class="btn btn-sm btn-outline-primary" type="button">Select all</button>
+          <button id="clear-all-crops" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
+        </div>
+        <div class="crop-tool-group" role="group" aria-label="Crop view tools">
+          <button id="lasso-crops" class="btn btn-sm btn-outline-secondary" type="button" aria-pressed="false" title="Drag across tiles to select; Alt-drag removes and Ctrl-drag toggles"><i class="bi bi-bounding-box"></i> Lasso</button>
+          <select id="crop-grid-size" class="form-select form-select-sm" aria-label="Crop grid size">
+            <option value="small">Small tiles</option>
+            <option value="medium" selected>Medium tiles</option>
+            <option value="large">Large tiles</option>
+          </select>
+        </div>
+        <button id="refresh-crops" class="btn btn-sm btn-outline-secondary icon-button" type="button" title="Refresh crops"><i class="bi bi-arrow-clockwise"></i></button>
+      </div>
+    </div>
+    <div id="crop-grid" class="curation-crop-grid"></div>
+    <button id="load-more-crops" class="btn btn-outline-secondary d-none mx-auto mt-3" type="button">Load more crops</button>
+    <div id="crop-selection-bar" class="selection-bar d-none" role="region" aria-label="Crop selection actions">
+      <span id="crop-selection-count" class="selection-count">0 selected</span>
+      <span class="selection-bar-sep" aria-hidden="true"></span>
+      <button id="crop-bar-include" class="btn btn-sm" type="button" data-min-role="project-curator">Include</button>
+      <button id="crop-bar-exclude" class="btn btn-sm" type="button" data-min-role="project-curator">Exclude</button>
+      <button id="crop-bar-relabel" class="btn btn-sm" type="button" data-min-role="project-curator">Relabel to…</button>
+      <span class="selection-bar-sep" aria-hidden="true"></span>
+      <div class="crop-tool-group crop-action-group" role="group" aria-label="Crop bulk action">
+        <select id="bulk-action" class="form-select form-select-sm" aria-label="Bulk action" data-min-role="project-curator">
+          <option value="">Bulk action</option><option value="relabel">Relabel to…</option>
+          <option value="include">Include</option><option value="exclude">Exclude</option>
+          <option value="reviewed">Mark reviewed</option><option value="flagged">Flag</option><option value="unreviewed">Mark unreviewed</option>
+        </select>
+        <input id="bulk-label" class="form-control form-control-sm d-none" list="relabel-options" placeholder="New label code" aria-label="New label code">
+        <input id="bulk-reason" class="form-control form-control-sm" maxlength="4000" placeholder="Reason (optional)" aria-label="Reason for this change">
+        <datalist id="relabel-options"></datalist>
+        <button id="apply-bulk" class="btn btn-sm btn-primary" type="button" data-min-role="project-curator" disabled>Apply</button>
+      </div>
+      <button id="crop-bar-clear" class="btn btn-sm" type="button">Clear</button>
+    </div>
+  </section>
+
+  <section id="dataset-status-panel" class="dataset-status-panel d-none">
+    <div id="status-kpis" class="status-kpis"></div>
+    <section class="splits-card panel">
+      <div class="curation-panel-title">
+        <div><strong>Splits</strong><small>Included items in train / val / test, as publishing now would see them</small></div>
+        <div class="splits-tools">
+          <select id="splits-group" class="form-select form-select-sm" aria-label="Group splits by">
+            <option value="label">By class</option><option value="region">By region</option>
+            <option value="island">By island</option><option value="survey_year">By year</option>
+            <option value="annotator">By annotator</option>
+          </select>
+          <label class="form-check form-check-inline small mb-0"><input id="splits-rare-only" class="form-check-input" type="checkbox"> Rare only</label>
+          <button id="splits-download" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-download"></i> CSV</button>
+        </div>
+      </div>
+      <div id="splits-table" class="splits-table"></div>
+    </section>
+    <section id="missing-card" class="splits-card panel">
+      <div class="curation-panel-title">
+        <div><strong>Missing images</strong><small>Source images not found in the bucket</small></div>
+        <div class="splits-tools">
+          <button id="missing-check" class="btn btn-sm btn-outline-primary" type="button" data-min-role="project-curator"><i class="bi bi-arrow-repeat"></i> Check again</button>
+          <a id="missing-download" class="btn btn-sm btn-outline-secondary" href="#"><i class="bi bi-download"></i> Download CSV</a>
+        </div>
+      </div>
+      <div id="missing-summary" class="small"></div>
+    </section>
+    <div class="status-layout">
+      <div class="panel"><h2>Available and included by label</h2><div id="status-labels" class="status-labels"></div></div>
+      <div class="panel"><h2>Regional coverage</h2><div id="status-regions" class="status-regions"></div></div>
+    </div>
+    <div class="status-layout">
+      <div class="panel">
+        <h2>Who is curating</h2>
+        <div id="status-curators" class="status-curators"></div>
+        <h2 class="mt-3">Compare people</h2>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <select id="people-a" class="form-select form-select-sm w-auto" aria-label="Person A"></select>
+          <select id="people-b" class="form-select form-select-sm w-auto" aria-label="Person B"></select>
+          <select id="people-since" class="form-select form-select-sm w-auto" aria-label="Since"><option value="">All time</option></select>
+          <button id="people-run" class="btn btn-sm btn-outline-primary" type="button">Compare</button>
+        </div>
+        <div id="people-result" class="mt-2"></div>
+      </div>
+      <div class="panel">
+        <div class="d-flex align-items-center justify-content-between">
+          <h2>Recent changes</h2>
+          <a id="audit-export" class="btn btn-sm btn-outline-secondary" href="#"><i class="bi bi-journal-text"></i> Audit trail (CSV)</a>
+        </div>
+        <ol id="status-activity" class="status-activity"></ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="versions-panel" class="versions-panel d-none" aria-label="Dataset versions">
+    <section class="history-section panel">
+      <div class="curation-panel-title"><div><strong>History</strong><small>Change sets, newest first</small></div>
+        <div class="d-flex gap-2">
+          <select id="history-person" class="form-select form-select-sm" aria-label="Person"><option value="">Everyone</option></select>
+          <select id="history-since" class="form-select form-select-sm" aria-label="Since"><option value="">All time</option></select>
+        </div></div>
+      <div id="history-uncommitted" class="small text-muted mb-2"></div>
+      <div id="history-list" class="history-list"></div>
+    </section>
+    <section class="compare-bar panel">
+      <strong>Compare</strong>
+      <select id="compare-base" class="form-select form-select-sm" aria-label="Compare from"></select>
+      <span>→</span>
+      <select id="compare-target" class="form-select form-select-sm" aria-label="Compare to"></select>
+      <button id="compare-run" class="btn btn-sm btn-outline-primary" type="button"><i class="bi bi-arrow-left-right"></i> Compare</button>
+      <div id="compare-result" class="compare-result"></div>
+    </section>
+    <div class="versions-layout">
+      <section class="versions-preview panel">
+        <div class="curation-panel-title">
+          <div><strong id="preview-title">What publishing now would change</strong>
+            <small id="preview-subtitle">Compared with the latest published version</small></div>
+          <button id="refresh-preview" class="btn btn-sm btn-outline-secondary icon-button" type="button" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+        <div id="preview-kpis" class="status-kpis"></div>
+        <h2 class="versions-h2">By class</h2>
+        <div class="table-responsive versions-table-wrap">
+          <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Class</th><th class="num">Before</th><th class="num">In</th><th class="num">Out</th><th class="num">Relabelled in</th><th class="num">Relabelled out</th><th class="num">Moved split</th><th class="num">Now</th><th class="num">Net</th></tr></thead>
+            <tbody id="preview-classes"></tbody>
+          </table>
+        </div>
+        <h2 class="versions-h2">Contributors since then</h2>
+        <div id="preview-contributors" class="status-curators"></div>
+        <form id="publish-form" class="publish-form">
+          <label class="form-label" for="publish-notes">Release notes <span class="text-muted">— what changed and why (goes in the change log)</span></label>
+          <textarea id="publish-notes" class="form-control" rows="2" maxlength="4000" placeholder="e.g. Pocillopora reviewed across Hawaii; blurry patches excluded"></textarea>
+          <button id="publish-button" class="btn btn-primary" type="submit" data-min-role="project-lead"><i class="bi bi-box-seam"></i> Publish version</button>
+          <span id="publish-message" class="small" role="status"></span>
+        </form>
+      </section>
+      <section class="versions-history panel">
+        <div class="curation-panel-title"><div><strong>Published versions</strong><small id="versions-count"></small></div></div>
+        <div id="versions-list" class="versions-list"></div>
+      </section>
+    </div>
+  </section>
+
+  <section id="confusion-matrix-panel" class="confusion-matrix-panel d-none">
+    <div class="matrix-toolbar">
+      <div><h2>Model evaluation</h2><p id="matrix-subtitle"></p></div>
+      <div class="matrix-controls">
+        <select id="matrix-source" class="form-select form-select-sm" aria-label="Evaluation or project items"><option value="">No completed evaluation</option><option value="imported_csv">All project items / CSV suggestions</option><option value="t3_v0_test">External T3 v0 benchmark</option></select>
+        <select id="evaluation-split" class="form-select form-select-sm" aria-label="Evaluated split"><option value="test">Test</option><option value="val">Validation</option><option value="train">Training</option><option value="all">All evaluated splits</option></select>
+        <select id="matrix-actual-axis" class="form-select form-select-sm" aria-label="Actual axis"><option value="current">Curated label</option><option value="source">Original human label</option></select>
+        <select id="matrix-normalization" class="form-select form-select-sm" aria-label="Normalization"><option value="row">Normalize by actual</option><option value="column">Normalize by predicted</option><option value="count">Raw counts</option></select>
+        <select id="matrix-class-order" class="form-select form-select-sm" aria-label="Class order"><option value="model">Model class order</option><option value="recall">Lowest recall first</option><option value="errors">Most errors first</option></select>
+        <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input id="matrix-search" class="form-control" placeholder="Find class"></div>
+        <span id="matrix-zoom-level" class="matrix-zoom-level">100%</span>
+        <button id="matrix-zoom-out" class="btn btn-sm btn-outline-secondary icon-button" type="button" title="Zoom matrix out"><i class="bi bi-zoom-out"></i></button>
+        <button id="matrix-zoom-in" class="btn btn-sm btn-outline-secondary icon-button" type="button" title="Zoom matrix in"><i class="bi bi-zoom-in"></i></button>
+        <button id="matrix-fit" class="btn btn-sm btn-outline-secondary icon-button" type="button" title="Fit matrix to width"><i class="bi bi-aspect-ratio"></i></button>
+        <button id="matrix-reset-zoom" class="btn btn-sm btn-outline-secondary icon-button" type="button" title="Reset matrix zoom"><i class="bi bi-arrow-counterclockwise"></i></button>
+        <button id="refresh-matrix" class="btn btn-sm btn-outline-secondary icon-button" type="button" title="Refresh matrix"><i class="bi bi-arrow-clockwise"></i></button>
+      </div>
+    </div>
+    <details id="evaluation-tools" class="evaluation-tools">
+      <summary><i class="bi bi-cpu"></i> Models and evaluation runs <span id="evaluation-worker-state"></span></summary>
+      <form id="evaluation-run-form" class="evaluation-run-form">
+        <label>Dataset version<select id="evaluation-version" class="form-select form-select-sm" required></select></label>
+        <label>Classifier<select id="evaluation-model" class="form-select form-select-sm" required></select></label>
+        <label>Device<select id="evaluation-device" class="form-select form-select-sm"><option value="cpu">CPU</option><option value="0">GPU 0</option></select></label>
+        <label>Batch<input id="evaluation-batch" class="form-control form-control-sm" type="number" min="1" max="128" value="32" required></label>
+        <fieldset class="evaluation-splits"><legend>Splits</legend><label><input type="checkbox" name="evaluation-splits" value="train" checked> Training</label><label><input type="checkbox" name="evaluation-splits" value="val" checked> Validation</label><label><input type="checkbox" name="evaluation-splits" value="test" checked> Test</label></fieldset>
+        <button id="start-evaluation" class="btn btn-sm btn-primary" type="submit" data-min-role="project-curator"><i class="bi bi-play-fill"></i> Evaluate</button>
+      </form>
+      <div id="evaluation-runs" class="evaluation-runs" aria-live="polite"></div>
+      <form id="evaluation-model-form" class="evaluation-model-form">
+        <label>Model name<input id="evaluation-model-name" class="form-control form-control-sm" maxlength="200" required></label>
+        <label>Configured model<select id="evaluation-model-reference" class="form-select form-select-sm"><option value="">Upload weights</option></select></label>
+        <label>Classifier weights<input id="evaluation-model-file" class="form-control form-control-sm" type="file" accept=".pt"></label>
+        <label class="evaluation-trust"><input id="evaluation-model-trusted" type="checkbox" required> I trust the source of these executable model weights</label>
+        <button id="model-from-hub" class="btn btn-sm btn-outline-secondary" type="button" data-min-role="create"><i class="bi bi-box-arrow-in-down"></i> From Hugging Face…</button>
+        <button id="register-evaluation-model" class="btn btn-sm btn-outline-primary" type="submit" data-min-role="create"><i class="bi bi-upload"></i> Register model</button>
+      </form>
+      <div id="evaluation-models" class="evaluation-models"></div>
+    </details>
+    <div id="evaluation-draft-state" class="small text-muted"></div>
+    <div id="matrix-kpis" class="matrix-kpis"></div>
+    <div class="matrix-provenance">
+      <i class="bi bi-info-circle"></i>
+      <span id="matrix-provenance-text"></span>
+      <a id="official-matrix-link" href="https://huggingface.co/NMFS-OSI/yolo11m-cls-noaa-pacific-benthic-cover-t3/blob/main/confusion_matrix_normalized.png" target="_blank" rel="noreferrer">Official T3 matrix <i class="bi bi-box-arrow-up-right"></i></a>
+    </div>
+    <div id="matrix-loading" class="matrix-loading">Loading matrix...</div>
+    <div id="matrix-scroll" class="matrix-scroll d-none"><table id="matrix-table" class="matrix-table"></table></div>
+    <section id="evaluation-drilldown" class="evaluation-drilldown d-none">
+      <div class="curation-panel-title"><div><strong id="evaluation-drilldown-title">Matrix crops</strong><small id="evaluation-drilldown-count">0 loaded</small></div><button id="close-evaluation-drilldown" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-x-lg"></i> Close</button></div>
+      <div class="matrix-split-toolbar">
+        <div class="matrix-split-tabs" role="tablist">
+          <button class="btn btn-sm active" type="button" data-matrix-split="test">Test evidence</button>
+          <button class="btn btn-sm" type="button" data-matrix-split="train">Training</button>
+          <button class="btn btn-sm" type="button" data-matrix-split="val">Validation</button>
+          <button class="btn btn-sm" type="button" data-matrix-split="all">All evaluated splits</button>
+        </div>
+        <span id="matrix-split-note"></span>
+        <select id="evaluation-evidence-kind" class="form-select form-select-sm" aria-label="Evidence scope"><option value="predictions">Model predictions</option><option value="inventory">Dataset members</option></select>
+        <select id="matrix-evidence-sort" class="form-select form-select-sm" aria-label="Test evidence sort">
+          <option value="confidence_desc">Confidence: high to low</option>
+          <option value="confidence_asc">Confidence: low to high</option>
+          <option value="filename">Filename</option>
+          <option value="dataset">Dataset order</option>
+        </select>
+        <select id="matrix-class-mode" class="form-select form-select-sm d-none" aria-label="Classes shown">
+          <option value="both">Show both classes</option>
+          <option value="actual">Show actual class only</option>
+          <option value="predicted">Show predicted class only</option>
+        </select>
+        <div id="matrix-class-toggles" class="matrix-class-toggles d-none" aria-label="Classes shown in split"></div>
+        <div id="matrix-asset-bulk" class="crop-bulk-tools d-none">
+          <button id="select-matrix-page" class="btn btn-sm btn-outline-secondary" type="button">Select page</button>
+          <button id="select-visible-matrix" class="btn btn-sm btn-outline-secondary" type="button">Select visible</button>
+          <button id="clear-visible-matrix" class="btn btn-sm btn-outline-secondary" type="button">Clear visible</button>
+          <button id="invert-visible-matrix" class="btn btn-sm btn-outline-secondary" type="button">Invert</button>
+          <button id="lasso-matrix" class="btn btn-sm btn-outline-secondary" type="button" aria-pressed="false" title="Drag across tiles to select; Alt-drag removes and Ctrl-drag toggles"><i class="bi bi-bounding-box"></i> Lasso</button>
+          <button id="select-all-matrix" class="btn btn-sm btn-outline-primary" type="button">Select all</button>
+          <button id="clear-all-matrix" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
+          <select id="matrix-grid-size" class="form-select form-select-sm" aria-label="Matrix grid size">
+            <option value="small">Small tiles</option>
+            <option value="medium" selected>Medium tiles</option>
+            <option value="large">Large tiles</option>
+          </select>
+        </div>
+      </div>
+      <div id="evaluation-grid" class="curation-crop-grid"></div>
+      <button id="load-more-evaluation" class="btn btn-outline-secondary d-none mx-auto mt-3" type="button">Load more crops</button>
+      <div id="matrix-selection-bar" class="selection-bar d-none" role="region" aria-label="Matrix selection actions">
+        <span id="matrix-selection-count" class="selection-count">0 selected</span>
+        <span class="selection-bar-sep" aria-hidden="true"></span>
+        <button id="matrix-bar-include" class="btn btn-sm" type="button" data-min-role="project-curator">Include</button>
+        <button id="matrix-bar-exclude" class="btn btn-sm" type="button" data-min-role="project-curator">Exclude</button>
+        <button id="matrix-bar-relabel" class="btn btn-sm" type="button" data-min-role="project-curator">Relabel to…</button>
+        <span class="selection-bar-sep" aria-hidden="true"></span>
+        <div class="crop-tool-group" role="group" aria-label="Matrix bulk action">
+          <select id="matrix-bulk-action" class="form-select form-select-sm" aria-label="Matrix bulk action" data-min-role="project-curator">
+            <option value="">Bulk action</option><option value="include">Include</option><option value="exclude">Exclude</option>
+            <option value="reviewed">Mark reviewed</option><option value="flagged">Flag</option><option value="unreviewed">Mark unreviewed</option>
+            <option value="relabel">Relabel</option>
+          </select>
+          <input id="matrix-bulk-label" class="form-control form-control-sm d-none" list="relabel-options" placeholder="New label">
+          <button id="apply-matrix-bulk" class="btn btn-sm btn-primary" type="button" data-min-role="project-curator" disabled>Apply</button>
+        </div>
+        <button id="matrix-bar-clear" class="btn btn-sm" type="button">Clear</button>
+      </div>
+    </section>
+  </section>
+</div>
+
+<dialog id="point-dialog" class="curation-dialog point-dialog">
+  <form id="point-form" method="dialog">
+    <div class="d-flex justify-content-between align-items-center mb-3"><h2>Add annotation point</h2><button id="close-point-dialog" class="btn btn-sm btn-outline-secondary icon-button" type="button" title="Close"><i class="bi bi-x-lg"></i></button></div>
+    <div class="row g-2"><div class="col"><label class="form-label" for="point-column">Column</label><input id="point-column" class="form-control" type="number" min="0" required></div><div class="col"><label class="form-label" for="point-row">Row</label><input id="point-row" class="form-control" type="number" min="0" required></div><div class="col"><label class="form-label" for="point-size">Patch</label><input id="point-size" class="form-control" type="number" min="32" max="1024" value="224"></div></div>
+    <label class="form-label mt-3" for="point-label">Label</label><input id="point-label" class="form-control" list="code-options" required>
+    <label class="form-label mt-3" for="point-reason">Reason</label><input id="point-reason" class="form-control" placeholder="Targeted species expansion">
+    <div id="point-classify-slot" class="point-classify-slot mt-3"></div>
+    <button class="btn btn-primary w-100" type="submit">Add point</button>
+  </form>
+</dialog>
+
+<dialog id="project-dialog" class="curation-dialog">
+  <form id="project-form" method="dialog">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2>Create project</h2>
+      <button id="close-project-dialog" class="btn btn-sm btn-outline-secondary icon-button" type="button" title="Close"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <label class="form-label" for="project-name">Name</label>
+    <input id="project-name" class="form-control" required maxlength="200">
+    <label class="form-label mt-3" for="project-mode">Dataset tier</label>
+    <select id="project-mode" class="form-select">
+      <option value="T3">T3 - Fine-grained classes</option>
+      <option value="T1">T1 - Broad functional classes</option>
+    </select>
+    <label class="form-label mt-3" for="project-description">Description</label>
+    <textarea id="project-description" class="form-control" rows="3"></textarea>
+    <button id="project-from-hub" class="btn btn-sm btn-outline-primary mt-3" type="button" data-min-role="create"><i class="bi bi-box-arrow-in-down"></i> From Hugging Face…</button>
+    <p class="text-muted small mt-3">You will be the project's owner. Everyone signed in can see it; curators can review in it.</p>
+    <div id="project-message" class="small text-danger" role="alert"></div>
+    <button class="btn btn-primary w-100 mt-3" value="default" type="submit">Create project</button>
+  </form>
+</dialog>
+
+<dialog id="hub-dialog" class="sheet curation-dialog hub-dialog">
+  <form id="hub-form" method="dialog">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 id="hub-title">From Hugging Face</h2>
+      <button class="btn btn-sm btn-outline-secondary icon-button" type="button" data-close-dialog="hub-dialog" title="Close"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <label class="form-label" for="hub-ref">Repository link or owner/name</label>
+    <div class="d-flex gap-2">
+      <input id="hub-ref" class="form-control" required maxlength="500" placeholder="https://huggingface.co/datasets/NMFS-OSI/noaa-pacific-benthic-cover-t3">
+      <button id="hub-lookup" class="btn btn-outline-primary" type="button">Look up</button>
+    </div>
+    <p class="text-muted small mt-1">Public repositories only. The commit you register is pinned: later changes to the repository do not change what is here.</p>
+    <div id="hub-preview" class="hub-preview" aria-live="polite"></div>
+    <div id="hub-dataset-fields" class="d-none">
+      <fieldset class="mt-2"><legend class="form-label">Where the patches are</legend>
+        <label class="d-block"><input type="radio" name="hub-location" value="column" checked> The dataset's own image column</label>
+        <label class="d-block"><input type="radio" name="hub-location" value="env_root"> This server's configured split root (<code id="hub-env-root">{{ split_root }}</code>)</label>
+        <label class="d-block"><input type="radio" name="hub-location" value="custom"> Another gs:// root:
+          <input id="hub-root" class="form-control form-control-sm d-inline-block w-auto" placeholder="gs://bucket/prefix"></label>
+        <small class="text-muted">Roots are read as <code>root/split/label/file</code>, and must be a bucket this server curates.</small>
+      </fieldset>
+      <fieldset class="mt-2"><legend class="form-label">Columns</legend>
+        <div id="hub-columns" class="hub-columns"></div>
+      </fieldset>
+      <fieldset class="mt-2"><legend class="form-label">Splits</legend><div id="hub-splits"></div></fieldset>
+      <button id="hub-register-dataset" class="btn btn-sm btn-primary mt-3" type="button">Register</button>
+      <div id="hub-check" class="hub-check small mt-2" aria-live="polite"></div>
+      <div class="hub-actions mt-3">
+        <div>
+          <label class="form-label" for="hub-project-name">New patch-only project</label>
+          <input id="hub-project-name" class="form-control form-control-sm" maxlength="200">
+          <select id="hub-project-mode" class="form-select form-select-sm mt-1"><option value="T3">T3</option><option value="T1">T1</option></select>
+          <button id="hub-create-project" class="btn btn-sm btn-primary mt-2" type="button" disabled>Create project</button>
+        </div>
+        <div>
+          <span class="form-label d-block">Or link to the current project</span>
+          <label class="d-block small"><input id="hub-adopt-splits" type="checkbox"> Adopt the dataset's splits (never overrides a split from a CSV)</label>
+          <button id="hub-link-preview" class="btn btn-sm btn-outline-primary mt-2" type="button" disabled>Preview link</button>
+          <button id="hub-link-apply" class="btn btn-sm btn-outline-danger mt-2 d-none" type="button">Apply link</button>
+        </div>
+      </div>
+    </div>
+    <div id="hub-model-fields" class="d-none">
+      <label class="form-label mt-2" for="hub-weight-file">Checkpoint</label>
+      <select id="hub-weight-file" class="form-select form-select-sm"></select>
+      <label class="form-label mt-2" for="hub-model-name">Name</label>
+      <input id="hub-model-name" class="form-control form-control-sm" maxlength="200">
+      <label class="d-block small mt-2"><input id="hub-model-trusted" type="checkbox"> I trust the source of these executable model weights</label>
+      <button id="hub-register-model" class="btn btn-sm btn-primary mt-2" type="button">Register model</button>
+    </div>
+    <div id="hub-message" class="small mt-2" role="status"></div>
+  </form>
+</dialog>
+
+<dialog id="hub-registry-dialog" class="sheet curation-dialog hub-dialog">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Registry</h2>
+    <button class="btn btn-sm btn-outline-secondary icon-button" type="button" data-close-dialog="hub-registry-dialog" title="Close"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <div id="hub-registry-list" class="hub-registry-list"></div>
+</dialog>
+
+<dialog id="members-dialog" class="sheet hub-dialog">
+  <div class="curation-panel-title"><div><strong>Members</strong><small id="members-subtitle"></small></div>
+    <button class="btn btn-sm btn-outline-secondary icon-button" type="button" data-close-dialog="members-dialog" title="Close"><i class="bi bi-x-lg"></i></button></div>
+  <div id="members-list"></div>
+  <form id="members-add" class="d-flex gap-2 mt-3">
+    <input id="members-username" class="form-control form-control-sm" list="members-user-options" placeholder="Username" aria-label="Username">
+    <datalist id="members-user-options"></datalist>
+    <select id="members-role" class="form-select form-select-sm" aria-label="Role"><option value="curator">Curator</option><option value="lead">Lead</option></select>
+    <button id="members-add-button" class="btn btn-sm btn-primary" type="submit" data-min-role="project-lead">Add</button>
+  </form>
+  <p id="members-message" class="small mt-2 mb-0" role="status"></p>
+</dialog>
+
+<dialog id="commit-dialog" class="sheet hub-dialog">
+  <div class="curation-panel-title"><div><strong>Commit your changes</strong><small>Your edits are already live; this groups them under a message others can read.</small></div>
+    <button class="btn btn-sm btn-outline-secondary icon-button" type="button" data-close-dialog="commit-dialog" title="Close"><i class="bi bi-x-lg"></i></button></div>
+  <label class="form-label" for="commit-message">Message <span class="text-muted" id="commit-counter">0/500</span></label>
+  <textarea id="commit-message" class="form-control" rows="2" maxlength="500" placeholder="e.g. Added crops for rare species ACAS"></textarea>
+  <div id="commit-summary" class="small mt-2"></div>
+  <div id="commit-recent" class="small mt-2 commit-recent"></div>
+  <div class="d-flex gap-2 mt-3"><button id="commit-confirm" class="btn btn-primary" type="button" disabled>Commit</button><span id="commit-error" class="small text-danger"></span></div>
+</dialog>
+
+<dialog id="releases-dialog" class="sheet hub-dialog releases-dialog">
+  <div class="curation-panel-title"><div><strong>Releases</strong><small>Datasets built from published versions of several projects</small></div>
+    <button class="btn btn-sm btn-outline-secondary icon-button" type="button" data-close-dialog="releases-dialog" title="Close"><i class="bi bi-x-lg"></i></button></div>
+  <div id="releases-list"></div>
+  <div id="release-detail" class="mt-2"></div>
+  <details class="mt-3"><summary><b>New release</b></summary>
+    <form id="release-form" class="mt-2">
+      <div class="d-flex gap-2"><input id="release-name" class="form-control form-control-sm" maxlength="200" placeholder="Name, e.g. Pacific T3 2026-Q4" aria-label="Release name">
+        <select id="release-mode" class="form-select form-select-sm w-auto" aria-label="Dataset mode"><option value="T3">T3</option><option value="T1">T1</option></select></div>
+      <div id="release-sources" class="mt-2"></div>
+      <textarea id="release-notes" class="form-control form-control-sm mt-2" rows="2" maxlength="4000" placeholder="Release notes"></textarea>
+      <button id="release-build" class="btn btn-sm btn-primary mt-2" type="submit" data-min-role="lead">Build release</button>
+      <span id="release-message" class="small ms-2" role="status"></span>
+    </form></details>
+  <details class="mt-3"><summary><b>Compare projects</b></summary>
+    <div class="d-flex flex-wrap gap-2 mt-2 align-items-center">
+      <select id="pc-a" class="form-select form-select-sm w-auto" aria-label="Project A"></select><select id="pc-a-version" class="form-select form-select-sm w-auto" aria-label="A version"></select>
+      <span>vs</span>
+      <select id="pc-b" class="form-select form-select-sm w-auto" aria-label="Project B"></select><select id="pc-b-version" class="form-select form-select-sm w-auto" aria-label="B version"></select>
+      <button id="pc-run" class="btn btn-sm btn-outline-primary" type="button">Compare</button>
+    </div>
+    <div id="pc-result" class="mt-2"></div></details>
+</dialog>
+{% endblock %}
+{% block page_scripts %}
+<script src="/static/curation/curation.js?v={{ asset_v }}"></script>
+<script src="/static/curation/hub.js?v={{ asset_v }}"></script>
+<script src="/static/curation/collab.js?v={{ asset_v }}"></script>
+<script src="/static/curation/editor.js?v={{ asset_v }}"></script>
+<script src="/static/curation/palette.js?v={{ asset_v }}"></script>
+{% endblock %}
