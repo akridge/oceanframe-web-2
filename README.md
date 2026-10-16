@@ -201,7 +201,7 @@ Sign in and you land on Curation.
 ### Install on a Cloud Workstation (or any Debian/Ubuntu host)
 
 ```bash
-git clone https://github.com/akridge/oceanframe-web-2 && cd oceanframe
+git clone https://github.com/akridge/oceanframe-web-2 && cd oceanframe-web-2
 bash deploy/install_oceanframe.sh          # regular: CPU, CLIP similarity search
 bash deploy/install_oceanframe_gpu.sh      # GPU: CUDA torch, SAM 3 on the GPU
 ```
