@@ -39,7 +39,7 @@ set -uo pipefail
 
 SCRIPT_VERSION="2026.10.01"
 VARIANT="${OCEANFRAME_INSTALL_VARIANT:-base}"
-REPO_URL="${OCEANFRAME_REPO_URL:-https://github.com/akridge/oceanframe.git}"
+REPO_URL="${OCEANFRAME_REPO_URL:-https://github.com/akridge/oceanframe-web-2.git}"
 BRANCH="${OCEANFRAME_BRANCH:-main}"
 HOST_PORT="${OCEANFRAME_HOST_PORT:-80}"
 PORT_NOTE=""
@@ -117,8 +117,17 @@ fi
 usermod -aG docker "$DOCKER_USER" 2>/dev/null || true
 
 changed=0
+# Set when Docker would not start from $DOCKER_ROOT: later runs (and boots) leave Docker's root alone.
+UNUSABLE="$DOCKER_ROOT/.oceanframe-root-unusable"
+if [ "$DOCKER_ROOT" != "system" ] && [ -f "$UNUSABLE" ]; then
+    log "Docker could not start from $DOCKER_ROOT before; leaving its data-root alone (delete $UNUSABLE to try again)"
+    DOCKER_ROOT=system
+fi
 if [ "$DOCKER_ROOT" != "system" ]; then
     mkdir -p "$DOCKER_ROOT" /etc/docker
+    # The config as it was, to put back if Docker will not start from the new root.
+    [ -f /etc/docker/daemon.json.pre-oceanframe ] || cp /etc/docker/daemon.json /etc/docker/daemon.json.pre-oceanframe 2>/dev/null \
+        || echo '{}' > /etc/docker/daemon.json.pre-oceanframe
     # Merge, never overwrite: nvidia-ctk (and admins) keep other keys here.
     if command -v python3 >/dev/null 2>&1; then
         out=$(python3 - "$DOCKER_ROOT" <<'PY'
@@ -164,12 +173,45 @@ if [ "$WANT_GPU" = "yes" ]; then
     fi
 fi
 
-if [ "$changed" = 1 ] || ! docker info >/dev/null 2>&1; then
+docker_up() { for _ in $(seq 1 "$1"); do docker info >/dev/null 2>&1 && return 0; sleep 2; done; return 1; }
+start_docker() {
     log "(re)starting Docker"
     systemctl restart docker 2>/dev/null || service docker restart 2>/dev/null || true
+    docker_up 30 && return 0
+    # No init system that manages Docker: run the daemon directly.
+    if command -v dockerd >/dev/null 2>&1 && ! pgrep -x dockerd >/dev/null 2>&1; then
+        log "starting dockerd directly (log: /var/log/dockerd.log)"
+        nohup dockerd >> /var/log/dockerd.log 2>&1 &
+        docker_up 30 && return 0
+    fi
+    return 1
+}
+docker_errors() {
+    { journalctl -u docker --no-pager -n 15 2>/dev/null; tail -n 15 /var/log/docker.log /var/log/dockerd.log 2>/dev/null; } \
+        | grep -iE 'error|fail|level=fatal' | tail -n 8 | sed 's/^/    /'
+}
+
+if [ "$changed" = 1 ] || ! docker info >/dev/null 2>&1; then
+    if ! start_docker && [ "$DOCKER_ROOT" != "system" ]; then
+        log "Docker would not start from $DOCKER_ROOT. Its errors:"
+        docker_errors
+        log "putting Docker's earlier configuration back and keeping its own data-root (images then rebuild after a restart)"
+        cp /etc/docker/daemon.json.pre-oceanframe /etc/docker/daemon.json
+        # An earlier run of this script may already have written the root into that copy.
+        python3 - "$DOCKER_ROOT" <<'PY' 2>/dev/null || true
+import json, sys
+path = "/etc/docker/daemon.json"
+config = json.load(open(path))
+if config.get("data-root") == sys.argv[1]:
+    del config["data-root"]
+    json.dump(config, open(path, "w"), indent=2)
+PY
+        touch "$UNUSABLE"
+        pkill -x dockerd 2>/dev/null || true
+        start_docker || true
+    fi
 fi
-for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done
-docker info >/dev/null 2>&1 && log "Docker ready (root: $(docker info -f '{{.DockerRootDir}}'))" || { log "Docker did not start"; exit 1; }
+docker_up 5 && log "Docker ready (root: $(docker info -f '{{.DockerRootDir}}'))" || { log "Docker did not start. Its errors:"; docker_errors; exit 1; }
 SETUP
 )"
 

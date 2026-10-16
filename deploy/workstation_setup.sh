@@ -2,7 +2,7 @@
 #
 # Set up the OceanFrame image library on a Google Cloud Workstation.
 #
-#   curl -SL https://raw.githubusercontent.com/akridge/oceanframe/main/deploy/workstation_setup.sh | bash
+#   curl -SL https://raw.githubusercontent.com/akridge/oceanframe-web-2/main/deploy/workstation_setup.sh | bash
 #
 # or, from a clone:
 #
@@ -19,7 +19,7 @@
 #   REPO_URL, INSTALL_DIR, BRANCH, PORT, LIB_SOURCE, WITH_ML, LIB_PATH_TAG_PATTERN
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/akridge/oceanframe}"
+REPO_URL="${REPO_URL:-https://github.com/akridge/oceanframe-web-2}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/oceanframe}"
 BRANCH="${BRANCH:-main}"
 PORT="${PORT:-8080}"

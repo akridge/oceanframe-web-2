@@ -5,7 +5,7 @@
 # Oracle, the app and the evaluation worker, and brings them back on boot.
 #
 #   sudo bash cloud_bootstrap.sh
-#   curl -SL https://raw.githubusercontent.com/akridge/oceanframe/main/cloud_bootstrap.sh | sudo bash
+#   curl -SL https://raw.githubusercontent.com/akridge/oceanframe-web-2/main/cloud_bootstrap.sh | sudo bash
 #
 # REPO_URL and BRANCH choose what to clone when not run from a checkout; every
 # OCEANFRAME_* setting of the installer passes through (see its header).

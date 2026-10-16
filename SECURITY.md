@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report security problems privately through GitHub's
-[private vulnerability reporting](https://github.com/akridge/oceanframe/security/advisories/new)
+[private vulnerability reporting](https://github.com/akridge/oceanframe-web-2/security/advisories/new)
 rather than in a public issue.
 
 ## Things to know before deploying
