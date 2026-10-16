@@ -12,7 +12,7 @@
 # =============================================================================
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/akridge/oceanframe}"
+REPO_URL="${REPO_URL:-https://github.com/akridge/oceanframe-web-2}"
 BRANCH="${BRANCH:-main}"
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd || true)"

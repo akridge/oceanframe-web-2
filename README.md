@@ -347,7 +347,7 @@ when it is not run from a checkout and hands over to `deploy/install_oceanframe.
 (above), so a bare Linux host ends up with the same stack, accounts and boot hooks.
 
 ```bash
-curl -SL https://raw.githubusercontent.com/akridge/oceanframe/main/cloud_bootstrap.sh | sudo bash
+curl -SL https://raw.githubusercontent.com/akridge/oceanframe-web-2/main/cloud_bootstrap.sh | sudo bash
 ```
 
 `REPO_URL` and `BRANCH` choose what it clones; the installer's `OCEANFRAME_*` settings pass through.
