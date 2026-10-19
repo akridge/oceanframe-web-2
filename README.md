@@ -225,6 +225,8 @@ It generates every password, writes them to `~/oceanframe_deployment/.env`
 Workstations "open port" default) and prints the `https://80-…cloudworkstations.dev`
 URL. Re-running it upgrades in place and never deletes data; to start the
 database over, re-run with `OCEANFRAME_RESET_DATA=yes` (it tars a backup first).
+**Updating an existing install:** see [UPDATING.md](UPDATING.md). It covers pulling the branch,
+re-running the installer, and the one-time steps for each round of changes.
 
 Manage it with the scripts it leaves in `~/oceanframe_deployment`:
 `oceanframe-start.sh`, `-stop`, `-restart`, `-status`, `-logs`, `-backup`, and

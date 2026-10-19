@@ -35,5 +35,5 @@ examples/
 tests/browser/*
 !tests/browser/*.py
 !tests/browser/*.md
-docs/superpowers/plans/2026-10-18-curation-streamline.md
 docs/superpowers/specs/2026-10-18-p4a-library-navigation-design.md
+docs/superpowers/plans/2026-10-18-curation-streamline.md
