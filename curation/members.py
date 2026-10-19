@@ -2,9 +2,11 @@
 Project membership: who may change a project, and who leads it.
 
 Project roles replace the app-wide curator/lead checks on project work: a
-member curates (or leads) that project whatever their app-wide role, and a
-non-member only reads it. App-wide admins count as lead everywhere and need
-no row.
+member curates (or leads) that project whatever their app-wide role. Projects
+are open by default: an account whose app-wide role is curator or above curates
+every project it is not a member of, unless a lead has made that project
+members-only (``source_config.restricted``). Viewers only read. App-wide admins
+count as lead everywhere and need no row; leading a project is always explicit.
 """
 from __future__ import annotations
 
@@ -24,18 +26,29 @@ from curation.models import CurationProject, CurationProjectMember
 ROLES = ("curator", "lead")
 
 
-def project_role(db: Session, project_id: str, user: CurrentUser) -> Optional[str]:
+def is_restricted(project: Optional[CurationProject]) -> bool:
+    return bool(project is not None and isinstance(project.source_config, dict) and project.source_config.get("restricted"))
+
+
+def _role(member_role: Optional[str], project: Optional[CurationProject], user: CurrentUser) -> Optional[str]:
     if user.has_role("admin"):
         return "lead"
-    return db.scalar(select(CurationProjectMember.role).where(
+    if member_role:
+        return member_role
+    return "curator" if user.has_role("curator") and project is not None and not is_restricted(project) else None
+
+
+def project_role(db: Session, project_id: str, user: CurrentUser) -> Optional[str]:
+    member_role = db.scalar(select(CurationProjectMember.role).where(
         CurationProjectMember.project_id == project_id, CurationProjectMember.user_id == user.id))
+    return _role(member_role, db.get(CurationProject, project_id), user)
 
 
 def roles_for(db: Session, user: CurrentUser) -> dict[str, str]:
-    if user.has_role("admin"):
-        return {project_id: "lead" for project_id in db.scalars(select(CurationProject.id))}
-    return dict(db.execute(select(CurationProjectMember.project_id, CurationProjectMember.role)
-                           .where(CurationProjectMember.user_id == user.id)).all())
+    explicit = dict(db.execute(select(CurationProjectMember.project_id, CurationProjectMember.role)
+                               .where(CurationProjectMember.user_id == user.id)).all())
+    roles = {project.id: _role(explicit.get(project.id), project, user) for project in db.scalars(select(CurationProject))}
+    return {project_id: role for project_id, role in roles.items() if role}
 
 
 def lead_names(db: Session, project_id: str) -> list[str]:
@@ -52,13 +65,16 @@ def require_project_role(minimum: str) -> Callable:
 
     def dependency(project_id: str, user: CurrentUser = Depends(current_user),
                    db: Session = Depends(get_db)) -> CurrentUser:
-        if db.get(CurationProject, project_id) is None:
+        project = db.get(CurationProject, project_id)
+        if project is None:
             raise HTTPException(status_code=404, detail="Curation project not found")
         role = project_role(db, project_id, user)
         if role is None:
+            if not user.has_role("curator"):
+                raise HTTPException(status_code=403, detail="Your account is view-only; ask an admin to make it a curator")
             leads = lead_names(db, project_id)
             ask = f" — ask a project lead ({', '.join(leads)}) to add you" if leads else ""
-            raise HTTPException(status_code=403, detail=f"You are not a member of this project{ask}")
+            raise HTTPException(status_code=403, detail=f"This project is members-only{ask}")
         if minimum == "lead" and role != "lead":
             raise HTTPException(status_code=403, detail="This needs the project lead role")
         return user
@@ -132,6 +148,16 @@ def set_role(db: Session, project_id: str, user_id: int, role: str, actor: Curre
     member.role = role
     db.commit()
     return next(m for m in list_members(db, project_id) if m["user_id"] == user_id)
+
+
+def set_restricted(db: Session, project_id: str, restricted: bool) -> bool:
+    """Members-only (True) or open to every curator account (False)."""
+    project = db.get(CurationProject, project_id)
+    config = {**(project.source_config if isinstance(project.source_config, dict) else {})}
+    config.pop("restricted", None)
+    project.source_config = {**config, **({"restricted": True} if restricted else {})}
+    db.commit()
+    return restricted
 
 
 def remove_member(db: Session, project_id: str, user_id: int, actor: CurrentUser) -> None:

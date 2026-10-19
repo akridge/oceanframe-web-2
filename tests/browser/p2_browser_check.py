@@ -1,6 +1,7 @@
 """Read-only browser check of the P2 collaboration UI on the new shell (opens sheets, changes nothing).
 
-tester2 is a curator on the HF project and not a member of NOAA. Checks: the read-only membership notice on
+tester2 is a curator on the HF project and not a member of NOAA, which a lead has made members-only (Members
+sheet -> Members only; an open project lets every curator account curate). Checks: the read-only membership notice on
 NOAA, the change-set history on HF, the Members sheet and the Releases sheet (both opened from the top bar's
 More menu, #topbar-more -> #topbar-more-menu), and the compare-people form on the Dataset status tab.
 

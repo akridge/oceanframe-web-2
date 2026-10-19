@@ -357,3 +357,27 @@ def test_items_get_their_split_when_created(client):
     point = client.post(f"{P}/projects/{pid}/source-images/{item['id']}/points",
                         json={"row_px": 5, "column_px": 5, "label": "POCS"}).json()
     assert point["split"] == item["split"]   # same photo, same split
+
+
+def test_manifests_and_the_live_export_say_where_each_point_came_from(client, db_session):
+    """origin: source (as imported), edited (moved or resized) or manual (added by a curator)."""
+    import json
+
+    from curation.models import CurationItem
+
+    pid = _project(client, "Origins")["id"]
+    kept = _add(client, pid, _on_image("o1", "ACBR", "origin-img"))
+    moved = _add(client, pid, _on_image("o2", "POCS", "origin-img"))
+    added = _add(client, pid, _on_image("o3", "SAND", "origin-img"))
+    db_session.get(CurationItem, moved["id"]).metadata_json = {"geometry_edited": True}
+    db_session.get(CurationItem, added["id"]).metadata_json = {"manual_point": True, "parent_item_id": kept["id"]}
+    db_session.commit()
+    _publish(client, pid)
+    rows = {int(r["item_id"]): r for r in csv.DictReader(io.StringIO(
+        client.get(f"{P}/projects/{pid}/versions/1/files/manifest.csv").text))}
+    assert {i: rows[i]["origin"] for i in rows} == {kept["id"]: "source", moved["id"]: "edited", added["id"]: "manual"}
+    summary = json.loads(client.get(f"{P}/projects/{pid}/versions/1/files/manifest.json").text)
+    assert summary["origins"] == {"source": 1, "edited": 1, "manual": 1}
+    export = {int(r["id"]): r for r in csv.DictReader(io.StringIO(client.get(f"{P}/projects/{pid}/export").text))}
+    assert export[added["id"]]["origin"] == "manual" and export[added["id"]]["parent_item_id"] == str(kept["id"])
+    assert export[kept["id"]]["crop_size"] == "224" and export[kept["id"]]["file_name"] == "o1.jpg"

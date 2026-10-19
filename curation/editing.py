@@ -38,7 +38,7 @@ def _dimensions(db: Session, uri: str) -> tuple[int, int]:
 def apply_batch(db: Session, project_id: str, anchor_item_id: int, batch: SourceEditBatch, user: CurrentUser) -> dict:
     project = service.get_project_or_404(db, project_id)
     anchor = service.get_item_or_404(db, project_id, anchor_item_id, "Source image not found")
-    if anchor.row_px is None or project.source_kind == "huggingface":
+    if anchor.row_px is None:  # a patch with no point on a source image (unlinked Hugging Face rows)
         raise HTTPException(status_code=422, detail="This project holds patches only; there is no source image to edit")
     width, height = _dimensions(db, anchor.source_image_uri)
     items = _image_items(db, project_id, anchor)
@@ -82,6 +82,7 @@ def apply_batch(db: Session, project_id: str, anchor_item_id: int, batch: Source
             item.crop_size = edit.crop_size
         if edit.op in {"move", "resize"}:
             item.metadata_json = {**(item.metadata_json or {}), "geometry_edited": True}
+            service.forget_quality(db, item.id)
         else:
             service.set_removed(item, edit.op == "remove")
         service._record_change(db, item, user, "item_updated", previous,  # noqa: SLF001

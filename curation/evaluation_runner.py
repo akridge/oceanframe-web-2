@@ -210,61 +210,94 @@ def stage_run(db: Session, run: CurationEvaluationRun) -> None:
     folder = settings.evaluation_spool() / "inputs" / run.id
     (folder / "images").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, folder / "model.pt")
-    frozen = db.scalars(select(CurationVersionInput).where(
-        CurationVersionInput.version_id == run.version_id,
-        CurationVersionInput.split.in_(run.specification["splits"])).order_by(CurationVersionInput.item_id)).all()
+    inputs = (CurationVersionInput.version_id == run.version_id,
+              CurationVersionInput.split.in_(run.specification["splits"]))
     project = SimpleNamespace(dataset_mode=run.specification["dataset_mode"])
     buckets = images.allowed_buckets(db)
     private_root = evaluation_runs.directory(run.id) / "images"
     private_root.mkdir(parents=True, exist_ok=True)
-    manifest, missing = [], []
-    requested = len(frozen)
+    requested = db.scalar(select(func.count()).select_from(CurationVersionInput).where(*inputs)) or 0
     if requested != run.expected_count:
         raise ValueError("Frozen input count does not match the requested evaluation")
-    with ThreadPoolExecutor(max_workers=settings.evaluation_fetch_workers(),
-                            thread_name_prefix="eval-fetch") as pool:
-        for start in range(0, len(frozen), CHUNK):
+    # A run cut off by a restart is staged again under the same id (recover_staging): patches already
+    # copied, and recorded in staged.jsonl with their digest, are not fetched or copied again.
+    log_path = evaluation_runs.directory(run.id) / "staged.jsonl"
+    done: dict[int, str] = {}
+    if log_path.is_file():
+        for line in log_path.read_text(encoding="utf-8").splitlines():
+            try:
+                entry = json.loads(line)
+                done[int(entry["item_id"])] = entry["sha256"]
+            except (ValueError, KeyError, TypeError):
+                continue  # a line cut short by the restart
+    missing: list[dict] = []
+    staged: Counter = Counter()
+    manifest_path = folder / "manifest.json"
+    after, processed = 0, 0
+    # Rows are read a chunk at a time and the manifest is written as it goes, so a 378k-patch run
+    # never holds them all in memory.
+    with ThreadPoolExecutor(max_workers=settings.evaluation_fetch_workers(), thread_name_prefix="eval-fetch") as pool, \
+            manifest_path.open("w", encoding="utf-8") as manifest, log_path.open("a", encoding="utf-8") as log:
+        manifest.write("[")
+        while True:
             db.refresh(run)
             if run.cancel_requested:
                 run.status = "cancelled"
                 run.completed_at = utcnow()
                 db.commit()
+                manifest.close()
                 discard_inputs(run.id)
                 return
-            chunk = frozen[start:start + CHUNK]
-            # map keeps input order, so the manifest stays in item_id order.
-            for item, loaded in zip(chunk, pool.map(lambda frozen_item: load_patch(frozen_item, project, buckets), chunk)):
-                if isinstance(loaded, str):
-                    missing.append({"item_id": item.item_id, "split": item.split,
-                                    "crop_uri": item.crop_uri or item.source_image_uri, "reason": loaded})
-                    continue
-                payload, cached = loaded
-                private = private_root / f"{item.item_id}.png"
-                if cached is not None:
-                    _link_or_copy(cached, private)
-                else:
-                    private.write_bytes(payload)
-                _link_or_copy(private, folder / "images" / f"{item.item_id}.png")
-                manifest.append({"item_id": item.item_id, "source_key": item.source_key, "label": item.label,
-                                 "split": item.split, "file_name": item.file_name,
-                                 "image_sha256": hashlib.sha256(payload).hexdigest()})
+            chunk = db.scalars(select(CurationVersionInput).where(*inputs, CurationVersionInput.item_id > after)
+                               .order_by(CurationVersionInput.item_id).limit(CHUNK)).all()
+            if not chunk:
+                break
+            after = chunk[-1].item_id
+            private = {item.item_id: private_root / f"{item.item_id}.png" for item in chunk}
+            shared = {item.item_id: folder / "images" / f"{item.item_id}.png" for item in chunk}
+            todo = [item for item in chunk
+                    if not (item.item_id in done and private[item.item_id].is_file() and shared[item.item_id].is_file())]
+            loaded = dict(zip((item.item_id for item in todo),
+                              pool.map(lambda frozen_item: load_patch(frozen_item, project, buckets), todo)))
+            for item in chunk:  # item_id order, so the manifest stays in item_id order
+                digest = done.get(item.item_id) if item.item_id not in loaded else None
+                if digest is None:
+                    result = loaded[item.item_id]
+                    if isinstance(result, str):
+                        missing.append({"item_id": item.item_id, "split": item.split,
+                                        "crop_uri": item.crop_uri or item.source_image_uri, "reason": result})
+                        continue
+                    payload, cached = result
+                    if cached is not None:
+                        _link_or_copy(cached, private[item.item_id])
+                    else:
+                        private[item.item_id].write_bytes(payload)
+                    _link_or_copy(private[item.item_id], shared[item.item_id])
+                    digest = hashlib.sha256(payload).hexdigest()
+                    log.write(json.dumps({"item_id": item.item_id, "sha256": digest}) + "\n")
+                manifest.write(("," if sum(staged.values()) else "") + json.dumps(
+                    {"item_id": item.item_id, "source_key": item.source_key, "label": item.label, "split": item.split,
+                     "file_name": item.file_name, "image_sha256": digest}, separators=(",", ":")))
+                staged[item.split] += 1
+            log.flush()
+            processed += len(chunk)
+            for item in chunk:
+                db.expunge(item)
             # How far the fetch has got, for the matrix's progress card (replaced when staging ends).
-            run.provenance = {**(run.provenance or {}), "staged_count": start + len(chunk)}
+            run.provenance = {**(run.provenance or {}), "staged_count": processed}
             db.commit()
             # Fail fast: a wrong root should not cost one request per patch.
             if len(missing) > settings.evaluation_max_missing() * requested:
                 _check_missing(run, missing, requested)
+        manifest.write("]")
     _check_missing(run, missing, requested)
-    if not manifest:
+    if not staged:
         raise ValueError("No patches could be read for this evaluation")
-    staged = Counter(entry["split"] for entry in manifest)
     run.specification = {**run.specification, "requested_split_counts": run.specification["split_counts"],
                          "split_counts": {split: staged[split] for split in run.specification["splits"] if staged[split]}}
-    run.expected_count = len(manifest)
+    run.expected_count = sum(staged.values())
     unscored = {"count": len(missing), "by_split": dict(Counter(entry["split"] for entry in missing)),
                 "examples": missing[:20]}
-    manifest_path = folder / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, separators=(",", ":")), encoding="utf-8")
     private_manifest = evaluation_runs.directory(run.id) / "manifest.json"
     shutil.copyfile(manifest_path, private_manifest)
     digest = file_hash(private_manifest)
@@ -452,8 +485,35 @@ class EvaluationPool:
 evaluation_pool = EvaluationPool()
 
 
+ACTIVE = ("queued", "staging", "running")
+
+
 def recover_staging(db: Session) -> None:
-    for run in db.scalars(select(CurationEvaluationRun).where(CurationEvaluationRun.status == "staging")):
-        run.status = "interrupted"
-        run.error_message = "Server restarted while staging inputs; create a new evaluation"
-        run.completed_at = utcnow()
+    """On startup: queue a run cut off mid-staging again (staging resumes), and remove leftover spool inputs."""
+    for run in db.scalars(select(CurationEvaluationRun).where(CurationEvaluationRun.status == "staging")).all():
+        if run.cancel_requested:
+            run.status = "cancelled"
+            run.completed_at = utcnow()
+        else:
+            run.status = "queued"
+    db.commit()
+    sweep_inputs(db)
+
+
+def sweep_inputs(db: Session) -> int:
+    """Remove spool input folders whose run is finished, failed, cancelled, interrupted or gone."""
+    root = settings.evaluation_spool() / "inputs"
+    if not root.is_dir():
+        return 0
+    folders = [path for path in root.iterdir() if path.is_dir() and not path.name.startswith("model-")]
+    active = set(db.scalars(select(CurationEvaluationRun.id).where(
+        CurationEvaluationRun.id.in_([path.name for path in folders]),
+        CurationEvaluationRun.status.in_(ACTIVE))).all()) if folders else set()
+    removed = 0
+    for path in folders:
+        if path.name not in active:
+            discard_inputs(path.name)
+            removed += 1
+    if removed:
+        logger.info("Removed %d leftover evaluation input folders", removed)
+    return removed

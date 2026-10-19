@@ -192,6 +192,31 @@ def test_a_batch_moves_resizes_removes_and_adds(client):
     assert len(detail["items"]) == 4
 
 
+def test_linked_hugging_face_patches_can_be_moved_and_added_to(client, db_session):
+    """A Hugging Face project whose patches were linked to their photos edits like any other."""
+    from curation.models import CurationItem, CurationProject
+    from curation.versions import point_origin
+
+    pid = _project(client, "Hub linked")["id"]
+    a, b, _ = _image_items(client, pid)
+    db_session.get(CurationProject, pid).source_kind = "huggingface"
+    row = db_session.get(CurationItem, a["id"])
+    row.metadata_json = {"hub": {"repo_id": "org/t3", "revision": "abc", "split": "train"}, "patch_only": False}
+    db_session.commit()
+    body = client.post(f"{P}/projects/{pid}/source-images/{a['id']}/edits", json={"edits": [
+        {"op": "move", "item_id": a["id"], "expected_revision": a["revision"], "row_px": 110, "column_px": 105}],
+        "added": [{"row_px": 150, "column_px": 150, "crop_size": 224, "label": "ACBR"}]})
+    assert body.status_code == 200, body.text
+    added = body.json()["added"][0]
+    assert client.post(f"{P}/projects/{pid}/source-images/{a['id']}/points",
+                       json={"row_px": 60, "column_px": 60, "label": "ACBR"}).status_code == 201
+    db_session.expire_all()
+    moved, new = db_session.get(CurationItem, a["id"]), db_session.get(CurationItem, added["id"])
+    assert point_origin(moved.metadata_json) == "edited" and point_origin(new.metadata_json) == "manual"
+    assert "hub" not in new.metadata_json and new.metadata_json["parent_item_id"] == a["id"]
+    assert point_origin(db_session.get(CurationItem, b["id"]).metadata_json) == "source"
+
+
 def test_stale_items_are_skipped_and_the_rest_apply(client):
     pid = _project(client, "Batch conflict")["id"]
     a, b, _ = _image_items(client, pid)

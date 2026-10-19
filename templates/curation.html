@@ -20,6 +20,7 @@
     <button id="status-view-button" class="btn btn-sm" type="button" title="Dataset status"><i class="bi bi-bar-chart"></i><span class="tab-label">Dataset status</span></button>
     <button id="matrix-view-button" class="btn btn-sm active" type="button" title="Confusion matrix"><i class="bi bi-grid"></i><span class="tab-label">Confusion matrix</span></button>
     <button id="versions-view-button" class="btn btn-sm" type="button" title="Versions"><i class="bi bi-layers"></i><span class="tab-label">Versions</span></button>
+    <button id="activity-view-button" class="btn btn-sm" type="button" title="Activity: who is online and what changed"><i class="bi bi-people"></i><span class="tab-label">Activity</span> <span id="online-count" class="online-count d-none" aria-label="curators online in this project"></span></button>
   </nav>
   <div class="topbar-actions">
     <button id="commit-pill" class="btn btn-sm btn-warning d-none" type="button" title="Group your changes under a message"></button>
@@ -100,6 +101,13 @@
           <option value="true">Included</option>
           <option value="false">Excluded</option>
         </select>
+        <select id="filter-split" class="form-select form-select-sm" aria-label="Split">
+          <option value="">Any split</option>
+          <option value="train">Train</option>
+          <option value="val">Validation</option>
+          <option value="test">Test</option>
+          <option value="unassigned">No split yet</option>
+        </select>
         <select id="filter-origin" class="form-select form-select-sm" aria-label="Label origin">
           <option value="">Any label origin</option>
           <option value="source">Matches source label</option>
@@ -120,6 +128,8 @@
       <div class="filters-checks">
         <label class="form-check form-check-inline small mb-0"><input id="filter-hide-missing" class="form-check-input" type="checkbox" checked> Hide missing images</label>
         <label class="form-check form-check-inline small mb-0"><input id="filter-show-removed" class="form-check-input" type="checkbox"> Show removed</label>
+        <label class="form-check form-check-inline small mb-0" title="Leave out source images whose every point is reviewed or flagged"><input id="filter-hide-handled" class="form-check-input" type="checkbox" checked> Hide finished images</label>
+        <label class="form-check form-check-inline small mb-0" title="Leave out what another curator has open right now"><input id="filter-hide-claimed" class="form-check-input" type="checkbox" checked> Hide others' open work</label>
       </div>
     </section>
     <div class="filters-actions">
@@ -163,6 +173,8 @@
 
   <div id="matrix-drilldown" class="matrix-drilldown d-none">
     <span id="matrix-drilldown-text"></span>
+    <button id="matrix-to-quality" class="btn btn-sm btn-outline-secondary" type="button" title="Review every patch in this cell, with all decisions"><i class="bi bi-ui-checks-grid"></i> Open in Quality review</button>
+    <button id="matrix-cleanup" class="btn btn-sm btn-outline-primary d-none" type="button" data-min-role="project-curator" title="Relabel, exclude or flag every patch in this cell at once"><i class="bi bi-magic"></i> Clean up this cell</button>
     <button id="clear-matrix-drilldown" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-x-lg"></i> Clear matrix filter</button>
   </div>
 
@@ -190,6 +202,7 @@
         </select>
         <select id="quality-signal-filter" class="form-select form-select-sm" aria-label="Quality signal filter">
           <option value="">All signals</option>
+          <option value="attention">Needs attention (review or reject)</option>
           <option value="clean">No threshold warnings</option>
           <option value="blurry">Low sharpness</option>
           <option value="too_dark">Too dark</option>
@@ -217,6 +230,10 @@
       <div class="quality-progress-copy"><strong id="quality-progress-label">Ready to analyze</strong><span id="quality-progress-count">0 / 0</span></div>
       <div class="progress" aria-hidden="true"><div id="quality-progress-bar" class="progress-bar" style="width:0%"></div></div>
     </div>
+    <div id="quality-prep" class="quality-prep">
+      <small id="quality-prep-text" class="text-muted" role="status" aria-live="polite"></small>
+      <button id="quality-prep-button" class="btn btn-sm btn-outline-primary" type="button" data-min-role="project-lead" title="Score every patch once on the server, so the signal filter covers all of them, not only the loaded ones">Prepare quality scores</button>
+    </div>
     <div class="quality-method">
       <span><i class="bi bi-activity"></i><b>Sharpness</b> edge detail, higher is sharper</span>
       <span><i class="bi bi-brightness-high"></i><b>Brightness</b> mean luminance, 0–255</span>
@@ -226,6 +243,10 @@
     </div>
     <div class="quality-summary" id="quality-summary"></div>
     <div id="quality-list" class="quality-list"></div>
+    <div class="quality-paging">
+      <small id="quality-paging-count" class="text-muted" role="status" aria-live="polite"></small>
+      <button id="quality-load-more" class="btn btn-outline-secondary d-none" type="button">Load more</button>
+    </div>
   </section>
 
   <div id="back-bar" class="back-bar d-none"><button id="back-button" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-arrow-left"></i> <span id="back-label">Back</span></button></div>
@@ -522,6 +543,18 @@
     </div>
   </section>
 
+  <section id="activity-panel" class="activity-panel d-none" aria-label="Activity">
+    <div class="status-layout">
+      <div class="panel">
+        <div class="curation-panel-title"><div><strong>Online now</strong><small id="online-summary">Everyone with curation open, in any project. Updates every 15 seconds.</small></div></div>
+        <ul id="online-list" class="online-list"></ul>
+      </div>
+      <div class="panel">
+        <div class="curation-panel-title"><div><strong>Recent changes in this project</strong><small>Newest first, as they happen</small></div></div>
+        <ol id="activity-feed" class="status-activity"></ol>
+      </div>
+    </div>
+  </section>
   <section id="versions-panel" class="versions-panel d-none" aria-label="Dataset versions">
     <section class="history-section panel">
       <div class="curation-panel-title"><div><strong>History</strong><small>Change sets, newest first</small></div>
@@ -776,9 +809,32 @@
   <div id="hub-registry-list" class="hub-registry-list"></div>
 </dialog>
 
+<dialog id="cleanup-dialog" class="sheet hub-dialog">
+  <div class="curation-panel-title"><div><strong>Clean up this cell</strong><small id="cleanup-subtitle"></small></div>
+    <button class="btn btn-sm btn-outline-secondary icon-button" type="button" data-close-dialog="cleanup-dialog" title="Close"><i class="bi bi-x-lg"></i></button></div>
+  <p class="small text-muted mb-2">One action for every patch of this class the model called the other. Patches someone changes after this preview are left alone.</p>
+  <div class="mb-2 small" role="group" aria-label="Splits to clean">
+    <div class="form-check form-check-inline"><input id="cleanup-split-train" class="form-check-input" type="checkbox" data-cleanup-split="train" checked><label class="form-check-label" for="cleanup-split-train">Train</label></div>
+    <div class="form-check form-check-inline"><input id="cleanup-split-val" class="form-check-input" type="checkbox" data-cleanup-split="val" checked><label class="form-check-label" for="cleanup-split-val">Val</label></div>
+    <div class="form-check form-check-inline"><input id="cleanup-split-test" class="form-check-input" type="checkbox" data-cleanup-split="test"><label class="form-check-label" for="cleanup-split-test">Test <span class="text-muted">(test-informed: asks first)</span></label></div>
+  </div>
+  <p id="cleanup-preview" class="small mb-1" role="status" aria-live="polite"></p>
+  <p id="cleanup-class-tally" class="small text-muted mb-3"></p>
+  <div class="d-flex flex-wrap gap-2">
+    <button id="cleanup-relabel" class="btn btn-sm btn-primary" type="button" data-cleanup-action="relabel"></button>
+    <button class="btn btn-sm btn-outline-danger" type="button" data-cleanup-action="exclude">Exclude from the draft</button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-cleanup-action="flag">Flag for a re-split</button>
+  </div>
+  <p id="cleanup-message" class="small mt-2 mb-0" role="status"></p>
+</dialog>
+
 <dialog id="members-dialog" class="sheet hub-dialog">
   <div class="curation-panel-title"><div><strong>Members</strong><small id="members-subtitle"></small></div>
     <button class="btn btn-sm btn-outline-secondary icon-button" type="button" data-close-dialog="members-dialog" title="Close"><i class="bi bi-x-lg"></i></button></div>
+  <div class="form-check form-switch mb-2">
+    <input id="members-restricted" class="form-check-input" type="checkbox" data-min-role="project-lead">
+    <label class="form-check-label small" for="members-restricted">Members only <span class="text-muted">— otherwise every curator account can curate this project</span></label>
+  </div>
   <div id="members-list"></div>
   <form id="members-add" class="d-flex gap-2 mt-3">
     <input id="members-username" class="form-control form-control-sm" list="members-user-options" placeholder="Username" aria-label="Username">
@@ -828,5 +884,6 @@
 <script src="/static/curation/hub.js?v={{ asset_v }}"></script>
 <script src="/static/curation/collab.js?v={{ asset_v }}"></script>
 <script src="/static/curation/editor.js?v={{ asset_v }}"></script>
+<script src="/static/curation/live.js?v={{ asset_v }}"></script>
 <script src="/static/curation/palette.js?v={{ asset_v }}"></script>
 {% endblock %}

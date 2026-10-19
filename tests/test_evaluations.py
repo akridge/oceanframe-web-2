@@ -126,7 +126,9 @@ def test_upload_and_evaluation_permissions(team, monkeypatch):
     evaluate = lambda role: team[role].post(f"{P}/projects/{pid}/evaluations", json={"version": 1, "classifier_id": "a" * 36})  # noqa: E731
     assert upload("vic").status_code == 403
     assert evaluate("vic").status_code == 403
-    # Evaluating a project is project work: a non-member is refused whatever the app-wide role.
+    # Evaluating a project is project work: on a members-only project a non-member is refused
+    # whatever the app-wide role.
+    assert team["admin"].put(f"{P}/projects/{pid}/access", json={"restricted": True}).status_code == 200
     assert evaluate("ana").status_code == 403
     _join(team, pid, "ana")
     # Members get past the role check; this then fails for another
@@ -315,11 +317,55 @@ def test_staging_and_missing_submitted_tasks_are_recovered(client, monkeypatch):
         run = db.get(CurationEvaluationRun, run_id)
         run.status = "staging"
         evaluation_runner.recover_staging(db)
-        assert run.status == "interrupted"
+        assert run.status == "queued" and run.completed_at is None
         run.status = "running"
         db.commit()
         evaluation_runner.sync_outputs(db)
         assert run.status == "interrupted" and "submitting" in run.error_message
+
+
+def test_staging_cut_off_by_a_restart_resumes_without_fetching_again(client, monkeypatch):
+    from appdb import session_scope
+    from curation import evaluation_runner, settings, storage
+    from curation.models import CurationEvaluationRun
+
+    pid, run_id, items = _queued_run(client, monkeypatch)
+    monkeypatch.setattr(storage, "read_bytes", lambda uri: _jpeg())
+    with session_scope() as db:
+        run = db.get(CurationEvaluationRun, run_id)
+        evaluation_runner.stage_run(db, run)
+        first = json.loads((settings.evaluation_spool() / "inputs" / run_id / "manifest.json").read_text())
+        # As if the server stopped before the run was handed to the worker.
+        run.status, run.provenance = "staging", {"staged_count": len(first)}
+        db.commit()
+        evaluation_runner.recover_staging(db)
+        assert run.status == "queued"
+
+        def no_fetch(uri):
+            raise AssertionError("patch fetched again")
+        monkeypatch.setattr(storage, "read_bytes", no_fetch)
+        evaluation_runner.stage_run(db, run)
+        assert run.status == "running" and run.expected_count == len(items)
+        again = json.loads((settings.evaluation_spool() / "inputs" / run_id / "manifest.json").read_text())
+        assert again == first
+
+
+def test_startup_removes_inputs_left_by_finished_runs(client, monkeypatch):
+    from appdb import session_scope
+    from curation import evaluation_runner, settings
+    from curation.models import CurationEvaluationRun
+
+    pid, run_id, items = _queued_run(client, monkeypatch)
+    root = settings.evaluation_spool() / "inputs"
+    for name in (run_id, "gone-run", "model-7"):
+        (root / name / "images").mkdir(parents=True, exist_ok=True)
+    with session_scope() as db:
+        evaluation_runner.recover_staging(db)
+        assert {path.name for path in root.iterdir()} >= {run_id, "model-7"}
+        assert not (root / "gone-run").exists()
+        db.get(CurationEvaluationRun, run_id).status = "interrupted"
+        db.commit()
+        assert evaluation_runner.sweep_inputs(db) == 1 and not (root / run_id).exists()
 
 
 def test_active_evaluation_blocks_project_deletion(client, monkeypatch):
@@ -434,3 +480,17 @@ def test_evidence_for_removed_points_is_hidden_unless_asked_for(client, monkeypa
         assert removed["id"] not in shown and items[0]["id"] in shown
         everything = client.get(base, params={**params, "removed": "any"}).json()["items"]
         assert removed["id"] in {item["curation_link"]["item_id"] for item in everything}
+
+
+def test_a_matrix_cell_filters_the_project_items(client, monkeypatch):
+    """Every item view can show the items behind one evaluation cell, per split, with a total."""
+    pid, run_id, items = _completed_run(client, monkeypatch)
+    base = f"{P}/projects/{pid}/items"
+    cell = {"eval_run": run_id, "eval_actual": "ACBR", "eval_predicted": "POCS"}
+    both = client.get(base, params={**cell, "with_total": "true"}).json()
+    assert {item["id"] for item in both["items"]} == {items[0]["id"], items[2]["id"]} and both["total"] == 2
+    train = client.get(base, params={**cell, "eval_split": "train"}).json()
+    assert [item["id"] for item in train["items"]] == [items[0]["id"]] and train["total"] is None
+    assert client.get(base, params={**cell, "eval_predicted": "ACBR"}).json()["returned"] == 0
+    assert client.get(base, params={"item_split": "val"}).json()["items"][0]["id"] == items[1]["id"]
+    assert client.get(base, params={"item_split": "everything"}).status_code == 422

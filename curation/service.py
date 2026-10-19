@@ -16,6 +16,7 @@ from typing import Iterable, Optional, Sequence
 
 from fastapi import HTTPException
 from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Query, Session
 
@@ -23,7 +24,10 @@ from appdb.base import blank_to_none, utcnow
 from auth.service import CurrentUser
 from curation import settings, taxonomy
 from curation.splits import split_for
-from curation.models import CurationEvaluationRun, CurationEvent, CurationImportOperation, CurationItem, CurationProject
+from curation.models import (
+    CurationEvaluationPrediction, CurationEvaluationRun, CurationEvent, CurationImportOperation, CurationItem, CurationProject,
+    CurationQualityMetric,
+)
 from curation.schemas import (
     CurationBulkUpdate, CurationItemCreate, CurationItemUpdate, CurationPointCreate,
     CurationProjectCreate, CurationQualityBulkRequest, CurationQualityReviewRequest,
@@ -132,6 +136,11 @@ def check_point_bounds(uri: str, row_px: int, column_px: int) -> None:
         raise _http(422, f"The point must be inside the image ({width}×{height})")
 
 
+def forget_quality(db: Session, item_id: int) -> None:
+    """A moved or resized point's quality score described the old patch (curation/quality.py)."""
+    db.execute(sa_delete(CurationQualityMetric).where(CurationQualityMetric.item_id == item_id))
+
+
 def set_removed(item: CurationItem, removed: bool) -> None:
     item.removed = removed
     item.included = not removed
@@ -223,6 +232,10 @@ def item_query(
     label_origin: Optional[str] = None, source_labels: Optional[Iterable[str]] = None,
     model_labels: Optional[Iterable[str]] = None,
     removed: Optional[str] = None, source_missing: Optional[str] = None,
+    split: Optional[str] = None, evaluation_id: Optional[str] = None, evaluation_actual: Optional[str] = None,
+    evaluation_predicted: Optional[str] = None, evaluation_split: Optional[str] = None,
+    quality_suggestion: Optional[str] = None, quality_flag: Optional[str] = None,
+    quality_max_score: Optional[int] = None,
 ) -> Query:
     query = db.query(CurationItem).filter(CurationItem.project_id == project_id)
     ids = list(item_ids or [])
@@ -269,6 +282,30 @@ def item_query(
             query = query.filter(column == False)  # noqa: E712
         elif mode == "only":
             query = query.filter(column == True)  # noqa: E712
+    if split == "unassigned":
+        query = query.filter(CurationItem.split.is_(None))
+    elif split:
+        query = query.filter(CurationItem.split == split)
+    if evaluation_id:  # the items behind one confusion-matrix cell of a saved evaluation
+        cell = select(CurationEvaluationPrediction.item_id).where(CurationEvaluationPrediction.run_id == evaluation_id)
+        for column, value in ((CurationEvaluationPrediction.actual_label, evaluation_actual),
+                              (CurationEvaluationPrediction.predicted_label, evaluation_predicted)):
+            if value:
+                cell = cell.where(column == value)
+        if evaluation_split and evaluation_split != "all":
+            cell = cell.where(CurationEvaluationPrediction.split == evaluation_split)
+        query = query.filter(CurationItem.id.in_(cell))
+    if quality_suggestion or quality_flag or quality_max_score is not None:  # server quality scores (quality.py)
+        scored = select(CurationQualityMetric.item_id).where(CurationQualityMetric.project_id == project_id)
+        if quality_suggestion == "attention":
+            scored = scored.where(CurationQualityMetric.suggestion != "accept")
+        elif quality_suggestion:
+            scored = scored.where(CurationQualityMetric.suggestion == quality_suggestion)
+        if quality_flag:
+            scored = scored.where(CurationQualityMetric.flags.like(f"%,{quality_flag},%"))
+        if quality_max_score is not None:
+            scored = scored.where(CurationQualityMetric.score <= quality_max_score)
+        query = query.filter(CurationItem.id.in_(scored))
     return query
 
 
@@ -296,6 +333,7 @@ def update_item(db: Session, project_id: str, item_id: int, request: CurationIte
         item.row_px, item.column_px = row, column
         item.crop_size = geometry.get("crop_size", item.crop_size)
         item.metadata_json = {**(item.metadata_json or {}), "geometry_edited": True}
+        forget_quality(db, item.id)
     if request.removed is not None:
         set_removed(item, request.removed)
     if evaluation_context and evaluation_context.get("split") == "test":
@@ -358,8 +396,9 @@ def _add_point(db: Session, project: CurationProject, anchor: CurationItem, *, r
         region=anchor.region, island=anchor.island, site=anchor.site, survey_year=anchor.survey_year,
         split=anchor.split,  # same photo, same split
         annotator=user.label,
-        metadata_json={**(anchor.metadata_json or {}), "annotator": user.label,
-                       "manual_point": True, "parent_item_id": anchor.id},
+        # The anchor's Hugging Face row and any move of its own belong to the anchor, not to this point.
+        metadata_json={**{k: v for k, v in (anchor.metadata_json or {}).items() if k not in {"hub", "geometry_edited"}},
+                       "annotator": user.label, "manual_point": True, "parent_item_id": anchor.id},
         created_by_user_id=user.id, updated_by_user_id=user.id, updated_by_name=user.label,
     )
     db.add(item)
@@ -374,9 +413,9 @@ def _add_point(db: Session, project: CurationProject, anchor: CurationItem, *, r
 def create_manual_point(db: Session, project_id: str, anchor_item_id: int, request: CurationPointCreate,
                         user: CurrentUser) -> CurationItem:
     project = get_project_or_404(db, project_id)
-    if project.source_kind == "huggingface":  # its items are patches with no source image to point at
-        raise HTTPException(422, "This project holds patches only; add points in a project with source images")
     anchor = get_item_or_404(db, project_id, anchor_item_id, "Source image not found")
+    if anchor.row_px is None:  # a patch with no source image to point at (an unlinked Hugging Face row)
+        raise HTTPException(422, "This patch has no source image; add points on an item linked to its photo")
     item = _add_point(db, project, anchor, row_px=request.row_px, column_px=request.column_px,
                       crop_size=request.crop_size, label=request.label, user=user, reason=request.reason)
     db.commit()
@@ -559,11 +598,25 @@ def activity(db: Session, project_id: str, limit: int = 100) -> dict:
     return {"events": events, "curators": curator_contributions(db, project_id)}
 
 
-def source_image_page(query: Query, after_id: int, limit: int, after_missing: int = 0) -> dict:
-    """Group filtered items by source image, missing images last, keyset-paged on (missing, first item id)."""
+def source_image_page(query: Query, after_id: int, limit: int, after_missing: int = 0, *,
+                      unhandled_only: bool = False, held_by_others=None) -> dict:
+    """Group filtered items by source image, missing images last, keyset-paged on (missing, first item id).
+
+    *unhandled_only* keeps images with a point still to review; *held_by_others* (a select of item
+    ids, curation/claims.py) drops images with a point someone else has open. Both decide per image,
+    so an image's counts stay those of all its points."""
     first_id = func.min(CurationItem.id)
     missing = func.max(case((CurationItem.source_missing == True, 1), else_=0))  # noqa: E712
-    grouped = query.with_entities(
+    grouping = query
+    conditions = [or_(missing > after_missing, and_(missing == after_missing, first_id > after_id))]
+    if unhandled_only:
+        conditions.append(func.sum(case((and_(CurationItem.review_state == "unreviewed",
+                                              CurationItem.removed == False), 1), else_=0)) > 0)  # noqa: E712
+    if held_by_others is not None:
+        held = held_by_others.subquery("held")
+        grouping = grouping.outerjoin(held, held.c.item_id == CurationItem.id)
+        conditions.append(func.count(held.c.item_id) == 0)
+    grouped = grouping.with_entities(
         CurationItem.source_image_uri.label("source_image_uri"),
         first_id.label("first_item_id"),
         missing.label("missing"),
@@ -573,8 +626,7 @@ def source_image_page(query: Query, after_id: int, limit: int, after_missing: in
         func.count(CurationItem.id).label("annotation_count"),
         func.sum(case((CurationItem.review_state == "reviewed", 1), else_=0)).label("reviewed_count"),
         func.sum(case((CurationItem.included == True, 1), else_=0)).label("included_count"),  # noqa: E712
-    ).group_by(CurationItem.source_image_uri).having(
-        or_(missing > after_missing, and_(missing == after_missing, first_id > after_id)))
+    ).group_by(CurationItem.source_image_uri).having(and_(*conditions))
     rows = grouped.order_by(missing, first_id).limit(limit + 1).all()
     has_more = len(rows) > limit
     page = rows[:limit]

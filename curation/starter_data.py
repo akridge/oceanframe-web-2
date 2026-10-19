@@ -37,8 +37,9 @@ DATASET_LOCATION = {"mode": "column"}
 # The repository holds weights/best.pt and a second copy named after the model;
 # best.pt is what the T3 baseline was scored with (docs/CURATION.md).
 PREFERRED_WEIGHT = "best.pt"
-# The baseline the starter model is scored on, once; the ledger key marks its v1 publish.
-BASELINE_SPLITS = ("test", "val")
+# The baseline the starter model is scored on, once; the ledger key marks its v1 publish. Train is
+# scored too, so a confusion-matrix cell can show the training patches the model gets wrong.
+BASELINE_SPLITS = ("train", "val", "test")
 BASELINE_PUBLISH = "starter-bl-publish"
 
 # migration_id is 20 characters wide: a short key per marker.
@@ -90,11 +91,12 @@ def _marked(db: Session, marker: str) -> Optional[CurationProject]:
 def _latest_status(db: Session, project: CurationProject) -> Optional[str]:
     """The status of the project's latest import. Availability checks run as operations too (one is queued
     after every import) but are not imports, so they are passed over."""
-    from curation import availability  # noqa: PLC0415
+    from curation import availability, quality  # noqa: PLC0415
 
     operations = db.scalars(select(CurationImportOperation).where(CurationImportOperation.project_id == project.id)
                             .order_by(CurationImportOperation.created_at.desc()).limit(20))
-    return next((operation.status for operation in operations if not availability.is_check(operation)), None)
+    return next((operation.status for operation in operations
+                 if not availability.is_check(operation) and not quality.is_job(operation)), None)
 
 
 def _needs_import(db: Session, project: CurationProject) -> bool:
@@ -277,21 +279,33 @@ def _publish_count(db: Session, project: CurationProject, status: str) -> int:
         CurationDatasetVersion.project_id == project.id, CurationDatasetVersion.status == status)) or 0
 
 
+def _covers_train(run: CurationEvaluationRun) -> bool:
+    """Whether a run scored the train split; one with no splits recorded is taken as it is."""
+    splits = (run.specification or {}).get("splits")
+    return not splits or "train" in splits
+
+
 def _baseline(db: Session, user) -> str:
-    """Score the starter model once on the Hugging Face project's test and val splits, so its
+    """Score the starter model once on the Hugging Face project's train, val and test splits, so its
     confusion matrix has a baseline from the first visit. One step per pass, decided from the
     database: wait for the import and the model, publish v1 if nothing is published, start the
-    run. "waiting" means a later pass has more to do; the run's id ends the part for good."""
+    run. "waiting" means a later pass has more to do; the run's id ends the part for good.
+
+    Installs whose baseline was scored on test and val only (before train was part of it) are
+    scored once more, with train; ``baseline_with_train`` records that this has been asked for."""
     from curation import evaluation_runner, versions  # noqa: PLC0415 — they import this package's neighbours
 
     project = _marked(db, HUB)
     if project is None:
         return "removed" if _ledger_has(db, _REMOVED[HUB]) else "waiting"
     config = project.source_config if isinstance(project.source_config, dict) else {}
+    previous = None
     if config.get("baseline_run"):
         previous = db.get(CurationEvaluationRun, config["baseline_run"])
+        without_train = (previous is not None and previous.status == "completed" and not _covers_train(previous)
+                         and not config.get("baseline_with_train"))
         # A restart cut it off (not a failure, not a curator's cancel): score it again.
-        if previous is None or previous.status != "interrupted":
+        if not without_train and (previous is None or previous.status != "interrupted"):
             return "ok"
     if _latest_status(db, project) != "completed" or not project.item_count:
         return "waiting"
@@ -309,7 +323,12 @@ def _baseline(db: Session, user) -> str:
         return "waiting"
     if model.status != "ready":
         return "waiting"
-    published = versions.latest_published(db, project.id)
+    # A re-score keeps the version the first baseline scored, so its test top-1 stays comparable (0.5986);
+    # curators' later versions are evaluated from the matrix like any other.
+    pinned = config.get("baseline_version") or (previous.version_id if previous is not None else None)
+    published = db.get(CurationDatasetVersion, pinned) if pinned else None
+    if published is None or published.status != "published":
+        published = versions.latest_published(db, project.id)
     if published is None:
         if _publish_count(db, project, "building"):
             return "waiting"
@@ -322,20 +341,22 @@ def _baseline(db: Session, user) -> str:
                                            applied_at=utcnow()))
         db.commit()
         versions.start_publish(db, project, user, "Starter baseline: the Hugging Face dataset as imported, "
-                                                  "scored once by the T3 classifier on test and val.")
+                                                  "scored once by the T3 classifier on train, val and test.")
         logger.info("Publishing %r v1 for the starter baseline evaluation", project.name)
         return "waiting"
-    run = db.scalar(select(CurationEvaluationRun).where(
+    runs = db.scalars(select(CurationEvaluationRun).where(
         CurationEvaluationRun.project_id == project.id, CurationEvaluationRun.version_id == published.id,
         CurationEvaluationRun.classifier_id == model.id, CurationEvaluationRun.status != "interrupted",
-    ).order_by(CurationEvaluationRun.created_at).limit(1))
+    ).order_by(CurationEvaluationRun.created_at)).all()
+    run = next((candidate for candidate in runs if _covers_train(candidate)), None)
     if run is None:
         device = "0" if model_registry.worker_gpus() else "cpu"
         run = evaluation_runner.start_run(db, project.id, version_number=published.version, classifier_id=model.id,
                                           splits=list(BASELINE_SPLITS), image_size=224,
                                           batch_size=128 if device != "cpu" else 32, device=device, user=user)
         logger.info("Started the starter baseline evaluation %s on %s (%s)", run.id, "/".join(BASELINE_SPLITS), device)
-    project.source_config = {**config, "baseline_run": run.id}
+    project.source_config = {**config, "baseline_run": run.id, "baseline_with_train": True,
+                             "baseline_version": published.id}
     db.commit()
     return "started"
 

@@ -405,28 +405,41 @@ def _is_hub_ref(value) -> bool:
             and isinstance(value.get("revision"), str) and bool(value["revision"]))
 
 
+def point_origin(metadata: Optional[dict]) -> str:
+    """Where a point came from: ``manual`` (added by a curator), ``edited`` (moved or resized, so its
+    patch is cut again from the source image) or ``source`` (as imported, e.g. a Hugging Face patch)."""
+    metadata = metadata or {}
+    if metadata.get("manual_point"):
+        return "manual"
+    return "edited" if metadata.get("geometry_edited") else "source"
+
+
 def _write_files(db: Session, project: CurationProject, version: CurationDatasetVersion) -> list[str]:
     folder = version_dir(project, version.version)
     folder.mkdir(parents=True, exist_ok=True)
 
+    origins: dict[str, int] = defaultdict(int)
     with (folder / "manifest.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
         writer.writerow(["item_id", "label", "split", "source_label", "crop_uri", "source_image_uri",
                          "row", "column", "crop_size", "region", "island", "site", "year", "annotator",
-                            "last_changed_by", "source_key", "file_name"])
+                            "last_changed_by", "source_key", "file_name", "origin"])
         rows = db.execute(
                      select(CurationVersionInput.item_id, CurationVersionInput.label, CurationVersionInput.split,
                          CurationVersionInput.source_label, CurationVersionInput.crop_uri, CurationVersionInput.source_image_uri,
                          CurationVersionInput.row_px, CurationVersionInput.column_px, CurationVersionInput.crop_size,
                          CurationVersionInput.region, CurationVersionInput.island, CurationVersionInput.site,
                          CurationVersionInput.survey_year, CurationVersionInput.annotator,
-                         CurationVersionInput.updated_by_name, CurationVersionInput.source_key, CurationVersionInput.file_name)
+                         CurationVersionInput.updated_by_name, CurationVersionInput.source_key, CurationVersionInput.file_name,
+                         CurationVersionInput.metadata_json)
                      .where(CurationVersionInput.version_id == version.id)
                      .order_by(CurationVersionInput.split, CurationVersionInput.label, CurationVersionInput.item_id)
             .execution_options(yield_per=5000)
         )
-        for row in rows:
-            writer.writerow(row)
+        for *row, metadata in rows:
+            origin = point_origin(metadata)
+            origins[origin] += 1
+            writer.writerow((*row, origin))
 
     summary = {
         "input_schema": 1,
@@ -441,6 +454,8 @@ def _write_files(db: Session, project: CurationProject, version: CurationDataset
         "change_sets": (version.changes or {}).get("change_sets", []),
         "uncommitted": (version.changes or {}).get("uncommitted", []),
         "derived_from": hub_provenance(project),
+        # derived_from names the dataset the project began as; these say how many rows are still as it had them.
+        "origins": dict(origins),
     }
     (folder / "manifest.json").write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
     (folder / "CHANGELOG.md").write_text(changelog_markdown(project, version), encoding="utf-8")

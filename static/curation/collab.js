@@ -23,7 +23,9 @@ async function renderMembership() {
   let leads = []
   try { leads = (await projectMembers()).filter(m => m.role === 'lead').map(m => m.display_name || m.username) } catch (_) {}
   if (state.projectId !== projectId || canDo('project-curator')) return
-  notice.textContent = `You can view this project. To curate it, ask a project lead${leads.length ? ` (${leads.join(', ')})` : ''} to add you.`
+  notice.textContent = ['curator', 'lead', 'admin'].includes(session.user.role)
+    ? `This project is members-only. To curate it, ask a project lead${leads.length ? ` (${leads.join(', ')})` : ''} to add you.`
+    : 'Your account is view-only. To curate, ask an admin to make it a curator account.'
   notice.classList.remove('d-none')
 }
 
@@ -32,7 +34,25 @@ async function openMembers() {
   byId('members-dialog').showModal()
   byId('members-message').textContent = ''
   byId('members-subtitle').textContent = currentProject()?.name || ''
+  byId('members-restricted').checked = Boolean(currentProject()?.source_config?.restricted)
   await renderMembersList(true)
+}
+
+async function setRestricted(restricted) {
+  const message = byId('members-message')
+  try {
+    await request(`/api/curation/projects/${state.projectId}/access`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ restricted }),
+    })
+    const project = currentProject()
+    if (project) project.source_config = { ...(project.source_config || {}), restricted }
+    message.textContent = restricted ? 'Only members can curate this project now.' : 'Every curator account can curate this project now.'
+    message.className = 'small mt-2 mb-0 text-success'
+  } catch (error) {
+    byId('members-restricted').checked = !restricted
+    message.textContent = error.message
+    message.className = 'small mt-2 mb-0 text-danger'
+  }
 }
 
 async function renderMembersList(force) {
@@ -83,6 +103,7 @@ async function refreshMyRole() {
 }
 
 byId('members-button').addEventListener('click', openMembers)
+byId('members-restricted').addEventListener('change', event => setRestricted(event.target.checked))
 byId('members-add').addEventListener('submit', event => {
   event.preventDefault()
   const username = byId('members-username').value.trim()
@@ -232,8 +253,9 @@ async function showItems(itemIds) {
   if (state.view === 'source' && typeof confirmDiscardPending === 'function' && !(await confirmDiscardPending())) return
   state.selectedTaxonomy.clear()
   state.selectedCodes.clear()
-  ;['filter-image', 'filter-label', 'taxonomy-filter', 'filter-state', 'filter-included', 'quality-filter', 'filter-region', 'filter-island', 'filter-year', 'filter-site', 'filter-annotator', 'filter-origin']
+  ;['filter-image', 'filter-label', 'taxonomy-filter', 'filter-state', 'filter-included', 'filter-split', 'quality-filter', 'filter-region', 'filter-island', 'filter-year', 'filter-site', 'filter-annotator', 'filter-origin']
     .forEach(id => { if (byId(id)) byId(id).value = '' })
+  byId('filter-hide-claimed').checked = false  // a change set's items, whoever has them open
   renderFilterChips()
   state.matrixLinkedItemIds = itemIds.slice(0, SHOW_ITEMS_CAP)
   state.matrixFilter = { actualAxis: 'source', evaluation: true, label: `Change set · ${fmt(state.matrixLinkedItemIds.length)} items${itemIds.length > SHOW_ITEMS_CAP ? ` (first ${fmt(SHOW_ITEMS_CAP)} of ${fmt(itemIds.length)})` : ''}` }

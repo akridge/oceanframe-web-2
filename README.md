@@ -194,8 +194,10 @@ evaluation worker, with [docker-compose.stack.gpu.yml](docker-compose.stack.gpu.
 From zero, either way, you get three accounts (admin, `test` as a lead, `user1` as a
 curator, passwords printed once and kept in `.env`), the NOAA Pacific T3 starter
 projects importing in the background, and the T3 classifier validated and then scored
-once on the Hugging Face project's test and val splits, so its confusion matrix is
-ready to curate from. Scoring ~114k patches takes minutes on a GPU, roughly 45 minutes on CPU.
+once on the Hugging Face project's train, val and test splits, so its confusion matrix is
+ready to curate from, training patches included. Scoring all ~379k patches takes under an hour on a GPU
+(most of it fetching them), several hours on CPU. An install whose baseline was scored on test and
+val only is scored once more, with train, after an update.
 Sign in and you land on Curation.
 
 ### Install on a Cloud Workstation (or any Debian/Ubuntu host)

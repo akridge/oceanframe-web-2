@@ -49,6 +49,17 @@ def set_member_role(project_id: str, user_id: int, body: RoleIn,
     return members.set_role(db, project_id, user_id, body.role, user)
 
 
+class AccessIn(BaseModel):
+    restricted: bool
+
+
+@router.put("/projects/{project_id}/access")
+def set_access(project_id: str, body: AccessIn, user: CurrentUser = Depends(members.require_project_lead),
+               db: Session = Depends(get_db)):
+    """Members-only, or open to every curator account (the default)."""
+    return {"restricted": members.set_restricted(db, project_id, body.restricted)}
+
+
 @router.delete("/projects/{project_id}/members/{user_id}")
 def remove_member(project_id: str, user_id: int, user: CurrentUser = Depends(members.require_project_lead),
                   db: Session = Depends(get_db)):

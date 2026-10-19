@@ -180,6 +180,59 @@ class CurationProjectMember(Base):
     added_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
 
+class CurationClaim(Base):
+    """Items a curator has open right now (curation/claims.py), so the others' queues skip them.
+
+    One row per item, held by one browser tab (``holder``) until it lets go or ``expires_at`` passes."""
+
+    __tablename__ = "curation_claims"
+    __table_args__ = (Index("ix_cur_claims_holder", "project_id", "holder"),)
+
+    project_id: Mapped[str] = mapped_column(ForeignKey("curation_projects.id", ondelete="CASCADE"), primary_key=True)
+    item_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    holder: Mapped[str] = mapped_column(Str(64), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("of_users.id", ondelete="CASCADE"), nullable=False)
+    user_name: Mapped[str] = mapped_column(Str(NAME_LEN), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class CurationQualityMetric(Base):
+    """A patch's image-quality score, worked out once on the server (curation/quality.py) so Quality
+    review can sort and filter every patch, not only those the browser has scored. ``signature`` is
+    the geometry it was scored for: a moved or resized point is scored again."""
+
+    __tablename__ = "curation_quality_metrics"
+    __table_args__ = (Index("ix_cur_quality_score", "project_id", "score"),)
+
+    item_id: Mapped[int] = mapped_column(ForeignKey("curation_items.id", ondelete="CASCADE"), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("curation_projects.id", ondelete="CASCADE"), nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    suggestion: Mapped[str] = mapped_column(Str(20), nullable=False)  # accept | manual_review | reject
+    flags: Mapped[str] = mapped_column(Str(200), nullable=False)  # ",blurry,too_dark," (delimited, for LIKE)
+    sharpness: Mapped[int | None] = mapped_column(Integer)
+    brightness: Mapped[int | None] = mapped_column(Integer)
+    contrast: Mapped[int | None] = mapped_column(Integer)
+    color_cast: Mapped[float | None] = mapped_column(Float)
+    clipped: Mapped[int | None] = mapped_column(Integer)
+    signature: Mapped[str] = mapped_column(Str(400), nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+
+class CurationPresence(Base):
+    """One open curation tab: who, in which project, looking at what, last heard from when (curation/presence.py)."""
+
+    __tablename__ = "curation_presence"
+    __table_args__ = (Index("ix_cur_presence_seen", "last_seen"),)
+
+    holder: Mapped[str] = mapped_column(Str(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("curation_projects.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("of_users.id", ondelete="CASCADE"), nullable=False)
+    user_name: Mapped[str] = mapped_column(Str(NAME_LEN), nullable=False)
+    view: Mapped[str] = mapped_column(Str(20), nullable=False)
+    detail: Mapped[str | None] = mapped_column(Str(300))
+    last_seen: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class CurationChangeSet(Base):
     """One person's edits, committed together under a message."""
 

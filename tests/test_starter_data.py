@@ -430,7 +430,8 @@ def baseline(starter, monkeypatch):
         db.commit()
 
     def start_run(db, project_id, *, version_number, classifier_id, splits, image_size, batch_size, device, user):
-        version = db.scalar(select(CurationDatasetVersion).where(CurationDatasetVersion.project_id == project_id))
+        version = db.scalar(select(CurationDatasetVersion).where(CurationDatasetVersion.project_id == project_id,
+                                                                 CurationDatasetVersion.version == version_number))
         run = CurationEvaluationRun(project_id=project_id, version_id=version.id, classifier_id=classifier_id)
         db.add(run)
         db.commit()
@@ -445,13 +446,13 @@ def baseline(starter, monkeypatch):
     return {"calls": calls, "hub_id": hub_id, "model_id": model_id}
 
 
-def test_baseline_validates_publishes_then_starts_one_run_on_test_and_val(baseline):
+def test_baseline_validates_publishes_then_starts_one_run_on_every_split(baseline):
     calls = baseline["calls"]
     assert _run()["parts"]["baseline"] == "waiting" and calls["validate"] == 1
     assert _run()["parts"]["baseline"] == "waiting" and calls["publish"] == 1
     result = _run()
     assert result["parts"]["baseline"] == "started"
-    assert calls["runs"] == [{"splits": ["test", "val"], "device": "0", "version": 1}]
+    assert calls["runs"] == [{"splits": ["train", "val", "test"], "device": "0", "version": 1}]
     assert _project(HUB_NAME)[1]["baseline_run"]
     again = _run()
     assert again["parts"]["baseline"] == "ok" and not again["pending"]
@@ -481,6 +482,34 @@ def test_baseline_uses_an_existing_run_rather_than_starting_another(baseline):
     _run()  # validates
     assert _run()["parts"]["baseline"] == "started"
     assert baseline["calls"]["runs"] == [] and baseline["calls"]["publish"] == 0
+
+
+def test_a_baseline_scored_without_train_is_scored_once_more_with_it(baseline):
+    """Installs from before train was part of the baseline get one more run, and only one."""
+    from appdb import session_scope
+    from curation.models import CurationDatasetVersion, CurationEvaluationRun, CurationProject
+
+    with session_scope() as db:
+        version = CurationDatasetVersion(project_id=baseline["hub_id"], version=1, status="published")
+        db.add(version)
+        db.flush()
+        old = CurationEvaluationRun(project_id=baseline["hub_id"], version_id=version.id, status="completed",
+                                    classifier_id=baseline["model_id"], specification={"splits": ["val", "test"]})
+        # Curators published since: the re-score still scores the version the baseline scored.
+        db.add(CurationDatasetVersion(project_id=baseline["hub_id"], version=2, status="published"))
+        db.add(old)
+        db.flush()
+        project = db.get(CurationProject, baseline["hub_id"])
+        project.source_config = {**project.source_config, "baseline_run": old.id}
+        old_id = old.id
+    _run()  # validates the model
+    assert _run()["parts"]["baseline"] == "started"
+    assert [(run["splits"], run["version"]) for run in baseline["calls"]["runs"]] == [(["train", "val", "test"], 1)]
+    config = _project(HUB_NAME)[1]
+    assert config["baseline_run"] != old_id and config["baseline_with_train"] is True
+    with session_scope() as db:  # the new run cannot list train (no snapshot here): it is still not retried
+        db.get(CurationEvaluationRun, config["baseline_run"]).status = "completed"
+    assert _run()["parts"]["baseline"] == "ok" and len(baseline["calls"]["runs"]) == 1
 
 
 def test_a_baseline_publish_that_failed_is_not_retried_by_itself(baseline):

@@ -1009,6 +1009,8 @@ def test_roles_gate_curation_writes(team, monkeypatch):
     monkeypatch.setenv("CURATION_CREATE_ROLE", "lead")
     response = team["ana"].post(f"{P}/projects", json={"name": "Nope"})
     assert response.status_code == 403 and "lead" in response.json()["detail"]
+    # Importing is project work: refused to a non-member once the project is members-only.
+    assert team["admin"].put(f"{P}/projects/{project['id']}/access", json={"restricted": True}).status_code == 200
     assert team["ana"].post(f"{P}/projects/{project['id']}/imports", json={"sources": sources[:1]}).status_code == 403
     # An unknown value fails closed, to lead.
     monkeypatch.setenv("CURATION_CREATE_ROLE", "everyone")

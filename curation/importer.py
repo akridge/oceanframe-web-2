@@ -236,6 +236,14 @@ def run_import(operation_id: str, cancel_event: threading.Event) -> None:
                 operation.rejected_rows = result["missing"]
                 db.commit()
                 continue
+            if kind == "quality_scores":
+                from curation import quality  # noqa: PLC0415
+
+                try:
+                    quality.run(db, operation, cancel_event)
+                except InterruptedError:
+                    break
+                continue
             if kind in {"hub_dataset", "hub_link"}:
                 from curation import hub_import  # noqa: PLC0415 — hub_import imports this module
 
@@ -255,7 +263,7 @@ def run_import(operation_id: str, cancel_event: threading.Event) -> None:
         operation.completed_at = utcnow()
         operation.current_source = None
         # A preview, or a check that imports nothing, leaves no trace on the project.
-        dry_run = all((s.get("kind") == "hub_link" and s.get("dry_run")) or s.get("kind") == "availability_check"
+        dry_run = all((s.get("kind") == "hub_link" and s.get("dry_run")) or s.get("kind") in {"availability_check", "quality_scores"}
                       for s in operation.sources)
         project = db.get(CurationProject, operation.project_id)
         if project is not None and not dry_run:  # a preview leaves no trace on the project

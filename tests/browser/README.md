@@ -21,7 +21,8 @@ MSYS_NO_PATHCONV=1 docker run --rm --network oceanframe-net -e OF_PW -e OF_PW2 -
   in a file in the repo. The older scripts default to `tester2` and project ids from an earlier database: set `OF_USER2`,
   `OF_PROJECT` (the NOAA project id) and `OF_HF_PROJECT` for a new install.
 - `OF_BASE` overrides the app URL (default `http://oceanframe-app:8080`).
-- `p2_browser_check.py` needs a user who is a curator on the Hugging Face project but not a member of NOAA, and
+- `p2_browser_check.py` needs a user who is a curator on the Hugging Face project but not a member of NOAA, with
+  NOAA made members-only (projects are open to every curator account otherwise), and
   `p3a_browser_check.py` needs the 'Hawaii sample' project; a new install has neither, so set them up first.
 - Exit codes: 0 pass, 1 a failed check, 2 setup problem (no password, login failed), 3 cleanup failed (P3a).
 
@@ -39,6 +40,7 @@ anything else under `tests/browser/` that is not a `.py` or `.md` file.
 | `responsive_sweep.py` | no horizontal scroll at 360 to 1024 px wide; the unsaved-edits pill, crop selection bar and Review popover stay inside the viewport and above the tab bar; touch devices show the crop tile's Open source image button | no |
 | `curation_topbar_sweep.py` | every view tab sits inside the viewport (or is scrollable at 640 px and below) at widths from 360 to 1920 px, with the commit pill and badge showing | no (the pill and badge are faked in the browser only) |
 | `p2_browser_check.py` | collaboration: the read-only notice for a non-member, change-set history, the Members and Releases sheets (opened from the Project menu), compare people | no |
+| `claims_browser_check.py` | two curators at once on the Hugging Face project (`OF_USER`/`OF_PW`, default user1, and `OF_USER2`/`OF_PW2`, default test): an open image is claimed and left out of the other's queue, opening it anyway says who has it, Quality review claims its undecided patches, the Activity tab shows the other's view with the online badge, leaving the page lets the claims and presence go. Screenshots in `shots/claims/`. | no (claims and presence only, released at the end) |
 | `p3a_browser_check.py` | the source-image editor: move, resize, remove, bulk add, save in one request, keyboard, overlays, the unsaved-edits guard sheets | yes, in the Hawaii sample project; see below |
 | `ui_tour.py` note | tester2's `/` redirects to `/collections/new`: the library page sends the browser there when no collection is registered (the "no collections yet" onboarding in `static/library/app.js`). The library page (grid, filter rail, search row, its palette actions) is therefore not covered by the tour or the sweeps; check it by hand on an instance with at least one collection. | no |
 | `curation_views_shots.py`, `palette_providers_check.py` | screenshots of the curation views; the palette's project, image and action providers | no |

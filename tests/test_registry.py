@@ -1154,7 +1154,9 @@ def test_resume_follows_project_membership(team, monkeypatch, hub_files):
     pid = team["ana"].post(f"{P}/projects", json={"name": "Resume roles"}).json()["id"]
     resume = f"{P}/hub/datasets/1/projects/{pid}/imports"
     assert team["vic"].post(resume).status_code == 403
-    assert team["ben"].post(resume).status_code == 403  # an app-wide curator, but not a member of this project
+    assert team["ben"].post(resume).status_code == 404  # an app-wide curator: an open project is his to curate
+    team["ana"].put(f"{P}/projects/{pid}/access", json={"restricted": True})
+    assert team["ben"].post(resume).status_code == 403  # members-only, and he is not a member
     assert team["ana"].post(resume).status_code == 404  # a member: past the role check; there is no entry 1
     team["ana"].post(f"{P}/projects/{pid}/members", json={"username": "vic", "role": "curator"})
     assert team["vic"].post(resume).status_code == 404  # a project curator, though an app-wide viewer
@@ -1187,7 +1189,7 @@ def test_the_requested_ref_is_the_ref_not_the_pasted_link(hub_client):
     assert entry["requested_ref"] == "main"
 
 
-def test_manual_points_are_refused_in_a_patch_only_project(hub_client):
+def test_manual_points_are_refused_on_a_patch_with_no_source_image(hub_client):
     entry = _registered_dataset(hub_client)
     created = hub_client.post(f"{P}/hub/datasets/{entry['id']}/projects",
                               json={"name": "Patches", "dataset_mode": "T3", "splits": ["test"]}).json()
@@ -1197,7 +1199,7 @@ def test_manual_points_are_refused_in_a_patch_only_project(hub_client):
     response = hub_client.post(f"{P}/projects/{project_id}/source-images/{anchor['id']}/points",
                                json={"row_px": 10, "column_px": 10, "label": "ACAS"})
     assert response.status_code == 422
-    assert response.json()["detail"] == "This project holds patches only; add points in a project with source images"
+    assert response.json()["detail"] == "This patch has no source image; add points on an item linked to its photo"
 def test_changelog_sets_derived_from_apart_and_marks_partial_links():
     from types import SimpleNamespace
 

@@ -104,7 +104,7 @@ echo "OceanFrame is running: http://localhost:${PORT}"
 echo "  Compose:  docker compose -p ${PROJECT} ${FILES[*]} <command>"
 if grep -q '^CURATION_STARTER_DATA=noaa-t3' .env; then
     echo "  Curation: the NOAA Pacific T3 starter projects import in the background; the T3"
-    echo "            classifier is then scored once on the test and val splits for the matrix."
+    echo "            classifier is then scored once on train, val and test for the matrix."
 fi
 if [ "$NEW_ENV" = yes ]; then
     echo "  Accounts (shown once; also in .env):"

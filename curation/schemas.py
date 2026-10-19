@@ -174,6 +174,7 @@ class CurationItemPage(BaseModel):
     items: list[CurationItemResponse]
     next_cursor: Optional[int] = None
     returned: int
+    total: Optional[int] = None  # only when asked for (with_total), so paging does not count every time
 
 
 class CurationItemUpdate(BaseModel):

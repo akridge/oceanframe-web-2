@@ -71,7 +71,7 @@ OCEANFRAME_ORIGIN_CHECK=on
 # ── Curation ────────────────────────────────────────────────────────────────
 # Starter data: the NOAA Pacific T3 regional project (~160 MB from the public
 # bucket), the Hugging Face T3 dataset as a project, and the T3 classifier, which
-# is then scored once on the dataset's test and val splits so the confusion matrix
+# is then scored once on the dataset's train, val and test splits so the confusion matrix
 # has a baseline. A project you delete stays deleted. noaa-t3 | regional | hub | off
 CURATION_STARTER_DATA=${starter}
 # Classifier checkpoints load only in the sandboxed evaluation worker; only these

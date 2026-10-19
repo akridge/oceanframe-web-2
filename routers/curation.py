@@ -25,7 +25,7 @@ from auth.deps import current_user, require_lead, require_role_from
 from auth.service import CurrentUser
 from curation import breakdown as split_breakdown
 from curation import members
-from curation import availability, editing, evaluation,evaluation_runner, evaluation_runs, image_cache, images, model_registry, scoring, service, settings, storage, taxonomy, versions
+from curation import availability, claims, cleanup, editing, evaluation,evaluation_runner, evaluation_runs, image_cache, images, model_registry, presence, quality, scoring, service, settings, storage, taxonomy, versions
 from curation.importer import curation_import_pool
 from curation.models import (
     CurationClassifier, CurationDatasetVersion, CurationEvaluationPrediction, CurationEvaluationRun,
@@ -72,6 +72,14 @@ def _filters(
     source_labels: Optional[str] = None, model_labels: Optional[str] = None,
     removed: str = Query("hide", pattern="^(hide|only|any)$"),
     source_missing: str = Query("any", pattern="^(hide|only|any)$"),
+    # Named apart from the matrix endpoints' own split / evaluation_id / actual_label parameters.
+    item_split: Optional[str] = Query(None, pattern="^(train|val|test|unassigned)$"),
+    eval_run: Optional[str] = None, eval_actual: Optional[str] = None, eval_predicted: Optional[str] = None,
+    eval_split: Optional[str] = Query(None, pattern="^(train|val|test|all)$"),
+    # Server quality scores (curation/quality.py): only patches the job has scored match these.
+    quality_suggestion: Optional[str] = Query(None, pattern="^(accept|manual_review|reject|attention)$"),
+    quality_flag: Optional[str] = Query(None, pattern="^[a-z_]{1,30}$"),
+    quality_max_score: Optional[int] = Query(None, ge=0, le=100),
 ) -> dict:
     """The shared filter set, as a dependency, so every view filters identically."""
     return {
@@ -80,6 +88,9 @@ def _filters(
         "year": year, "site": site, "image_search": image_search, "annotator": annotator,
         "label_origin": label_origin, "source_labels": _parse_labels(source_labels),
         "model_labels": _parse_labels(model_labels), "removed": removed, "source_missing": source_missing,
+        "split": item_split, "evaluation_id": eval_run, "evaluation_actual": eval_actual,
+        "evaluation_predicted": eval_predicted, "evaluation_split": eval_split,
+        "quality_suggestion": quality_suggestion, "quality_flag": quality_flag, "quality_max_score": quality_max_score,
     }
 
 
@@ -267,6 +278,41 @@ def correct_evaluated_item(project_id: str, run_id: str, prediction_id: int, bod
                                          body, user, body.confirm_test)
 
 
+class CleanupIn(BaseModel):
+    actual: str = Field(min_length=1, max_length=100)
+    predicted: str = Field(min_length=1, max_length=100)
+    action: str = Field(pattern="^(relabel|exclude|flag)$")
+    splits: list[str] = Field(default_factory=lambda: ["train", "val"], min_length=1, max_length=3)
+    watermark: int = Field(ge=0)
+    confirm_test: bool = False
+    reason: Optional[str] = Field(default=None, max_length=4000)
+
+
+@router.get("/projects/{project_id}/evaluations/{run_id}/cleanup")
+def cleanup_preview(project_id: str, run_id: str, actual: str, predicted: str,
+                    splits: str = Query("train,val", pattern="^(train|val|test)(,(train|val|test)){0,2}$"),
+                    db: Session = Depends(get_db)):
+    """One matrix cell: patches per split, how many are already cleaned, and the watermark to apply against."""
+    return cleanup.preview(db, evaluation_runs.get_run(db, project_id, run_id), actual, predicted, splits.split(","))
+
+
+@router.post("/projects/{project_id}/evaluations/{run_id}/cleanup")
+def cleanup_apply(project_id: str, run_id: str, body: CleanupIn,
+                  user: CurrentUser = Depends(members.require_project_curator), db: Session = Depends(get_db)):
+    """Relabel, exclude or flag every patch of the cell; patches changed since the preview are left alone."""
+    return cleanup.apply(db, evaluation_runs.get_run(db, project_id, run_id), actual=body.actual,
+                         predicted=body.predicted, action=body.action, splits=body.splits, watermark=body.watermark,
+                         user=user, confirm_test=body.confirm_test, reason=body.reason)
+
+
+@router.get("/projects/{project_id}/evaluations/{run_id}/cleanup/tally")
+def cleanup_tally(project_id: str, run_id: str,
+                  splits: str = Query("train,val", pattern="^(train|val|test)(,(train|val|test)){0,2}$"),
+                  db: Session = Depends(get_db)):
+    """Cleaned N of M per off-diagonal cell and per class."""
+    return cleanup.tally(db, evaluation_runs.get_run(db, project_id, run_id), splits.split(","))
+
+
 @router.patch("/projects/{project_id}/evaluations/{run_id}/inputs/{item_id}/item", response_model=CurationItemResponse)
 def correct_dataset_member(project_id: str, run_id: str, item_id: int, body: EvaluationCorrectionIn,
                             user: CurrentUser = Depends(members.require_project_curator), db: Session = Depends(get_db)):
@@ -336,7 +382,7 @@ def list_imports(project_id: str, db: Session = Depends(get_db)):
     offset = 0
     while len(found) < 20:
         window = db.scalars(query.offset(offset).limit(100)).all()
-        found += [op for op in window if not availability.is_check(op)]
+        found += [op for op in window if not availability.is_check(op) and not quality.is_job(op)]
         if len(window) < 100:
             break
         offset += 100
@@ -381,13 +427,17 @@ def add_item(project_id: str, request: CurationItemCreate, user: CurrentUser = D
 
 @router.get("/projects/{project_id}/items", response_model=CurationItemPage)
 def list_items(project_id: str, after_id: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
-               label: Optional[str] = None, filters: dict = Depends(_filters), db: Session = Depends(get_db)):
+               label: Optional[str] = None, with_total: bool = False, hide_claimed: bool = False,
+               filters: dict = Depends(_filters), user: CurrentUser = Depends(current_user),
+               db: Session = Depends(get_db)):
     service.get_project_or_404(db, project_id)
-    rows = service.item_query(db, project_id, label=label, **filters) \
-        .filter(CurationItem.id > after_id).order_by(CurationItem.id).limit(limit + 1).all()
+    query = service.item_query(db, project_id, label=label, **filters)
+    if hide_claimed:  # items another curator has open (curation/claims.py)
+        query = query.filter(CurationItem.id.not_in(claims.others_hold(project_id, user.id)))
+    rows = query.filter(CurationItem.id > after_id).order_by(CurationItem.id).limit(limit + 1).all()
     page = rows[:limit]
     return {"items": page, "next_cursor": page[-1].id if len(rows) > limit and page else None,
-            "returned": len(page)}
+            "returned": len(page), "total": query.order_by(None).count() if with_total else None}
 
 
 @router.patch("/projects/{project_id}/items/{item_id}", response_model=CurationItemResponse)
@@ -451,9 +501,58 @@ def crop_preview(project_id: str, item_id: int, db: Session = Depends(get_db)):
 @router.get("/projects/{project_id}/source-images", response_model=CurationSourceImagePage)
 def list_source_images(project_id: str, after_id: int = Query(0, ge=0), after_missing: int = Query(0, ge=0, le=1),
                        limit: int = Query(30, ge=1, le=100),
-                       filters: dict = Depends(_filters), db: Session = Depends(get_db)):
+                       handled: str = Query("any", pattern="^(any|hide)$"), hide_claimed: bool = False,
+                       filters: dict = Depends(_filters), user: CurrentUser = Depends(current_user),
+                       db: Session = Depends(get_db)):
+    """*handled=hide* leaves out images with every point reviewed or flagged; *hide_claimed* those
+    with a point another curator has open."""
     service.get_project_or_404(db, project_id)
-    return service.source_image_page(service.item_query(db, project_id, **filters), after_id, limit, after_missing)
+    return service.source_image_page(
+        service.item_query(db, project_id, **filters), after_id, limit, after_missing,
+        unhandled_only=handled == "hide",
+        held_by_others=claims.others_hold(project_id, user.id) if hide_claimed else None)
+
+
+# ── Claims and the change feed (curation/claims.py) ─────────────────────────────
+
+class ClaimRequest(BaseModel):
+    holder: str = Field(min_length=8, max_length=64)
+    item_ids: list[int] = Field(default_factory=list, max_length=5000)
+
+
+@router.post("/projects/{project_id}/claims")
+def set_claims(project_id: str, request: ClaimRequest,
+               user: CurrentUser = Depends(members.require_project_curator), db: Session = Depends(get_db)):
+    """The calling tab's claims become exactly these items; an empty list lets go of all of them."""
+    service.get_project_or_404(db, project_id)
+    return claims.set_claims(db, project_id, request.holder, request.item_ids, user)
+
+
+class PresenceRequest(BaseModel):
+    holder: str = Field(min_length=8, max_length=64)
+    view: str = Field("source", max_length=20)
+    detail: Optional[str] = Field(None, max_length=300)
+    leaving: bool = False
+
+
+@router.post("/projects/{project_id}/presence")
+def post_presence(project_id: str, request: PresenceRequest, user: CurrentUser = Depends(current_user),
+                  db: Session = Depends(get_db)):
+    """This tab is here (or, with *leaving*, gone); answers with everyone online, for the Activity tab."""
+    service.get_project_or_404(db, project_id)
+    if request.leaving:
+        presence.leave(db, request.holder, user)
+        return {"online": []}
+    presence.heartbeat(db, project_id, request.holder, user, request.view, request.detail)
+    return {"online": presence.online(db)}
+
+
+@router.get("/projects/{project_id}/changes")
+def get_changes(project_id: str, after_id: Optional[int] = Query(None, ge=0),
+                user: CurrentUser = Depends(current_user), db: Session = Depends(get_db)):
+    """Items other users changed after event *after_id*, and the items they have open."""
+    service.get_project_or_404(db, project_id)
+    return claims.changes(db, project_id, after_id, user)
 
 
 @router.post("/projects/{project_id}/availability", response_model=CurationImportResponse, status_code=202)
@@ -474,6 +573,23 @@ def availability_csv(project_id: str, db: Session = Depends(get_db)):
     project = service.get_project_or_404(db, project_id)
     return Response(availability.missing_csv(db, project_id), media_type="text/csv",
                     headers={"Content-Disposition": f'attachment; filename="{versions._slug(project.name)}_missing_images.csv"'})  # noqa: SLF001
+
+
+@router.post("/projects/{project_id}/quality-scores", response_model=CurationImportResponse, status_code=202)
+def prepare_quality_scores(project_id: str, user: CurrentUser = Depends(members.require_project_lead),
+                           db: Session = Depends(get_db)):
+    """Score every patch once, in the background (resumable: run it again and it does what is left)."""
+    return quality.queue(db, project_id, user)
+
+
+@router.get("/projects/{project_id}/quality-scores")
+def quality_scores(project_id: str, item_ids: Optional[str] = None, db: Session = Depends(get_db)):
+    """With item_ids, those patches' scores; without, how far scoring has got."""
+    service.get_project_or_404(db, project_id)
+    ids = _parse_item_ids(item_ids)
+    if ids:
+        return {"scores": {str(k): v for k, v in quality.scores_for(db, project_id, ids[:1000]).items()}}
+    return quality.summary(db, project_id)
 
 
 @router.get("/projects/{project_id}/source-images/{first_item_id}", response_model=CurationSourceImageDetail)
@@ -691,6 +807,8 @@ EXPORT_COLUMNS = [
     "review_state", "row", "column", "region", "island", "site", "year", "split", "annotator",
     "model_label", "model_confidence", "quality_decision", "quality_score", "quality_flags",
     "quality_reviewed_by", "revision", "updated_by", "updated_at",
+    # What cutting the patch again needs, and whether it was added or moved here.
+    "crop_size", "file_name", "origin", "parent_item_id",
 ]
 
 
@@ -706,6 +824,8 @@ def _export_record(item: CurationItem) -> dict:
         "quality_flags": ";".join(item.quality_flags or []), "quality_reviewed_by": item.quality_reviewed_by,
         "revision": item.revision, "updated_by": item.updated_by_name,
         "updated_at": item.updated_at.isoformat() + "Z" if item.updated_at else None,
+        "crop_size": item.crop_size, "file_name": item.file_name, "origin": versions.point_origin(item.metadata_json),
+        "parent_item_id": (item.metadata_json or {}).get("parent_item_id"),
     }
 
 

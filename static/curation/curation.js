@@ -1,6 +1,6 @@
 'use strict'
 
-const state = { projects: [], projectId: null, view: 'source', images: [], currentImage: null, items: [], selected: null, sourceCursor: null, sourceCursorMissing: 0, sourceQueueLoaded: false, crops: [], cropCursor: null, selectedCropIds: new Set(), cropGridSize: 'medium', resolvedCropUris: new Map(), qualityItems: [], qualityRunId: 0, qualityScope: 'patch', taxonomy: [], facets: null, selectedTaxonomy: new Map(), selectedCodes: new Set(), matrix: null, matrixFilter: null, matrixLinkedItemIds: [], matrixZoom: 1, evaluationItems: [], evaluationCursor: null, evaluationSplit: 'test', evaluationSort: 'confidence_desc', matrixClassModes: { train: 'both', val: 'both' }, selectedMatrixClasses: new Set(), selectedMatrixItemIds: new Set(), matrixGridSize: 'medium', lassoGrid: null, suppressGridClickUntil: 0, models: [], addPointMode: false, imageView: { zoom: 1, panX: 0, panY: 0, dragging: false, moved: false, startX: 0, startY: 0 }, importId: null, importTimer: null, backTo: null, pendingImage: null }
+const state = { projects: [], projectId: null, view: 'source', images: [], currentImage: null, items: [], selected: null, sourceCursor: null, sourceCursorMissing: 0, sourceQueueLoaded: false, crops: [], cropCursor: null, selectedCropIds: new Set(), cropGridSize: 'medium', resolvedCropUris: new Map(), qualityItems: [], qualityRunId: 0, qualityScope: 'patch', qualityCursor: null, qualityTotal: null, taxonomy: [], facets: null, selectedTaxonomy: new Map(), selectedCodes: new Set(), matrix: null, matrixFilter: null, matrixLinkedItemIds: [], matrixZoom: 1, evaluationItems: [], evaluationCursor: null, evaluationSplit: 'test', evaluationSort: 'confidence_desc', matrixClassModes: { train: 'both', val: 'both' }, selectedMatrixClasses: new Set(), selectedMatrixItemIds: new Set(), matrixGridSize: 'medium', lassoGrid: null, suppressGridClickUntil: 0, models: [], addPointMode: false, imageView: { zoom: 1, panX: 0, panY: 0, dragging: false, moved: false, startX: 0, startY: 0 }, importId: null, importTimer: null, backTo: null, pendingImage: null }
 const byId = id => document.getElementById(id)
 const evaluationState = { runs: [], models: [], benchmarks: [], timer: null, editContext: null, preferred: null, projectId: null, assetRequest: 0 }
 const proxyUrl = (uri, rawOrientation = false) => `/api/curation/image?uri=${encodeURIComponent(uri)}${rawOrientation ? '&raw_orientation=true' : ''}`
@@ -91,6 +91,7 @@ async function loadProjects() {
     resetSourceWorkspace()
     renderProjectMode()
     renderTaxonomyOptions()
+    if (typeof resetChangeFeed === 'function') await resetChangeFeed()  // live.js: before any list loads
     await loadEvaluationCatalog()
     setView(state.pendingView || 'matrix')
     state.pendingView = null
@@ -190,7 +191,7 @@ async function loadLatestImport() {
 // An availability check runs as an import operation, but Dataset status owns it.
 function isAvailabilityCheck(operation) {
   return Boolean(operation?.sources?.length) &&
-    operation.sources.every(source => source.kind === 'availability_check')
+    operation.sources.every(source => ['availability_check', 'quality_scores'].includes(source.kind))
 }
 
 function renderImport(operation) {
@@ -260,12 +261,23 @@ function currentFilters() {
   state.selectedTaxonomy.forEach(node => node.codes.forEach(code => codes.add(code)))
   if (imageSearch) params.set('image_search', imageSearch)
   if (codes.size) params.set('labels', [...codes].join(','))
-  if (state.matrixFilter?.actual) {
-    if (state.matrixFilter.actualAxis === 'source') params.set('source_labels', state.matrixFilter.actual)
-    else params.set('labels', [...codes, state.matrixFilter.actual].join(','))
+  // A saved run's predictions cell is filtered on the server, so every view gets all of its items, not
+  // just the evidence cards loaded so far. Dataset members and change sets still send the loaded ids.
+  const runCell = state.matrixFilter?.runId && byId('evaluation-evidence-kind').value !== 'inventory'
+  if (runCell) {
+    params.set('eval_run', state.matrixFilter.runId)
+    if (state.matrixFilter.actual) params.set('eval_actual', state.matrixFilter.actual)
+    if (state.matrixFilter.predicted) params.set('eval_predicted', state.matrixFilter.predicted)
+    params.set('eval_split', state.evaluationSplit)
+  } else {
+    if (state.matrixFilter?.actual) {
+      if (state.matrixFilter.actualAxis === 'source') params.set('source_labels', state.matrixFilter.actual)
+      else params.set('labels', [...codes, state.matrixFilter.actual].join(','))
+    }
+    if (state.matrixFilter?.modelCodes?.length) params.set('model_labels', state.matrixFilter.modelCodes.join(','))
+    if (state.matrixFilter?.evaluation) params.set('item_ids', state.matrixLinkedItemIds.length ? state.matrixLinkedItemIds.join(',') : '0')
   }
-  if (state.matrixFilter?.modelCodes?.length) params.set('model_labels', state.matrixFilter.modelCodes.join(','))
-  if (state.matrixFilter?.evaluation) params.set('item_ids', state.matrixLinkedItemIds.length ? state.matrixLinkedItemIds.join(',') : '0')
+  if (byId('filter-split').value) params.set('item_split', byId('filter-split').value)
   if (reviewState) params.set('review_state', reviewState)
   if (qualityDecision) params.set('quality_decision', qualityDecision)
   if (included) params.set('included', included)
@@ -277,6 +289,7 @@ function currentFilters() {
   if (byId('filter-origin').value) params.set('label_origin', byId('filter-origin').value)
   params.set('source_missing', byId('filter-hide-missing').checked ? 'hide' : 'any')
   if (byId('filter-show-removed').checked) params.set('removed', 'any')
+  if (byId('filter-hide-claimed').checked) params.set('hide_claimed', 'true')  // read by the item and image lists only
   return params
 }
 
@@ -309,6 +322,7 @@ const FILTER_CHIP_SELECTS = [
   // [control id, chip label, show the option text (static options) rather than the value (facets)]
   ['filter-state', 'State', true],
   ['filter-included', 'Inclusion', true],
+  ['filter-split', 'Split', true],
   ['filter-origin', 'Origin', true],
   ['filter-region', 'Region', false],
   ['filter-island', 'Island', false],
@@ -340,6 +354,8 @@ function renderFilterChipBar() {
     return `<button type="button" class="chip${on ? ' chip-active' : ''}" data-chip-toggle="${id}" aria-pressed="${on}">${on ? '<i class="bi bi-check2" aria-hidden="true"></i> ' : ''}${escapeHtml(label)}</button>`
   }
   chips.push(toggle('filter-hide-missing', 'Hide missing images'), toggle('filter-show-removed', 'Show removed'))
+  if (state.view === 'source') chips.push(toggle('filter-hide-handled', 'Hide finished images'))
+  chips.push(toggle('filter-hide-claimed', "Hide others' open work"))
   // A saved evaluation is a fixed snapshot: say so rather than let active filters look ignored.
   const fixedMatrix = state.view === 'matrix' && (selectedRunId() || byId('matrix-source')?.value === 't3_v0_test')
   if (active && fixedMatrix) chips.push(`<span class="chip-note">Filters don't change a saved evaluation's matrix</span>`)
@@ -389,9 +405,11 @@ function clearFilters() {
   state.selectedCodes.clear()
   state.matrixFilter = null
   ;['filter-image', 'filter-label'].forEach(id => { byId(id).value = '' })
-  ;['taxonomy-filter', 'filter-state', 'filter-included', 'quality-filter', 'filter-region', 'filter-island', 'filter-year', 'filter-site', 'filter-annotator', 'filter-origin'].forEach(id => { if (byId(id)) byId(id).value = '' })
+  ;['taxonomy-filter', 'filter-state', 'filter-included', 'filter-split', 'quality-filter', 'filter-region', 'filter-island', 'filter-year', 'filter-site', 'filter-annotator', 'filter-origin'].forEach(id => { if (byId(id)) byId(id).value = '' })
   byId('filter-hide-missing').checked = true
   byId('filter-show-removed').checked = false
+  byId('filter-hide-handled').checked = true
+  byId('filter-hide-claimed').checked = true
   renderFilterChips()
   renderMatrixDrilldown()
   renderFilterChipBar()
@@ -436,6 +454,7 @@ async function deleteProject() {
 async function loadQueue(append) {
   if (!state.projectId) return
   const params = currentFilters()
+  if (byId('filter-hide-handled').checked) params.set('handled', 'hide')
   if (append && state.sourceCursor) {
     params.set('after_id', state.sourceCursor)
     params.set('after_missing', state.sourceCursorMissing || 0)
@@ -732,7 +751,7 @@ async function applyBulkAction() {
 // ── Links to a view ──────────────────────────────────────────────────────────
 // The hash keeps project, view and evaluation run, so a refresh or a shared
 // link lands where it was: /curation#project=<id>&view=versions
-const VIEWS = ['source', 'crop', 'quality', 'status', 'matrix', 'versions']
+const VIEWS = ['source', 'crop', 'quality', 'status', 'matrix', 'versions', 'activity']
 
 function readHash() {
   const params = new URLSearchParams(window.location.hash.slice(1))
@@ -812,17 +831,21 @@ async function setView(view, backTarget = null) {
     && typeof confirmDiscardPending === 'function' && !(await confirmDiscardPending())) { writeHash(); return false }
   state.view = view
   renderFilterChipBar()
+  renderMatrixDrilldown()
+  if (typeof syncClaims === 'function') syncClaims()  // live.js: leaving a view lets go of what it had open
+  if (typeof sendPresence === 'function' && live.projectId === state.projectId) sendPresence()  // others see the move now
   if (view !== 'source') state.backTo = backTarget
   const source = view === 'source'
   const crops = view === 'crop'
   const quality = view === 'quality'
   ;[['source', 'source-view-button'], ['crop', 'crop-view-button'], ['quality', 'quality-view-button'],
-    ['status', 'status-view-button'], ['matrix', 'matrix-view-button'], ['versions', 'versions-view-button']].forEach(([name, id]) => {
+    ['status', 'status-view-button'], ['matrix', 'matrix-view-button'], ['versions', 'versions-view-button'], ['activity', 'activity-view-button']].forEach(([name, id]) => {
     const tab = byId(id)
     tab.classList.toggle('active', view === name)
     if (view === name) tab.setAttribute('aria-current', 'true'); else tab.removeAttribute('aria-current')
   })
   byId('versions-panel').classList.toggle('d-none', view !== 'versions' || !state.projectId)
+  byId('activity-panel').classList.toggle('d-none', view !== 'activity' || !state.projectId)
   byId('curation-workspace').classList.toggle('d-none', !source || !state.projectId)
   byId('crop-grid-panel').classList.toggle('d-none', !crops || !state.projectId)
   byId('quality-panel').classList.toggle('d-none', !quality || !state.projectId)
@@ -833,7 +856,10 @@ async function setView(view, backTarget = null) {
   // The first visit loads the queue and opens its first image, so there is something to review straight away.
   if (source && (state.matrixFilter || !state.sourceQueueLoaded)) {
     loads.push(loadQueue(false).then(() => {
-      if (!state.currentImage && !state.pendingImage && state.images[0]) return selectImage(state.images[0].first_item_id)
+      if (!state.currentImage && !state.pendingImage && state.images[0]) {
+        return selectImage(state.images[0].first_item_id)
+          .then(opened => opened && typeof skipHeldImages === 'function' && skipHeldImages(1))
+      }
     }))
   }
   if (crops) loads.push(loadCrops(false))
@@ -841,6 +867,7 @@ async function setView(view, backTarget = null) {
   if (view === 'status') loads.push(loadDatasetStatus())
   if (view === 'matrix') loads.push(loadConfusionMatrix())
   if (view === 'versions') loads.push(loadVersions())
+  if (view === 'activity' && typeof loadActivityView === 'function') loads.push(loadActivityView())
   renderBackBar()
   writeHash()
   await Promise.all(loads.map(load => Promise.resolve(load).catch(error => showNotice(error.message))))
@@ -1157,21 +1184,50 @@ function updateQualityProgress(completed, total, label = 'Analyzing image qualit
   byId('quality-progress-bar').style.width = `${percent}%`
 }
 
-async function loadQualityReview() {
+// One page at a time (keyset, like the crop grid): Load more appends the next page and analyses only it.
+async function loadQualityReview(append = false) {
   if (!state.projectId) return
+  if (append && !state.qualityCursor) return
   const runId = ++state.qualityRunId
   const patchScope = state.qualityScope === 'patch'
-  state.qualityItems = []
+  const kept = append ? state.qualityItems : []
+  if (!append) {
+    state.qualityItems = []
+    state.qualityCursor = null
+    state.qualityTotal = null
+    byId('quality-summary').innerHTML = ''
+    byId('quality-list').innerHTML = skeletonRows(6).replaceAll('skeleton-row', 'skeleton-row skeleton-card')  // replaced as results arrive
+  }
+  byId('quality-load-more').disabled = true
   updateQualityProgress(0, 0, patchScope ? 'Finding patches…' : 'Finding source images…')
-  byId('quality-summary').innerHTML = ''
-  byId('quality-list').innerHTML = skeletonRows(6).replaceAll('skeleton-row', 'skeleton-row skeleton-card')  // replaced as results arrive
+  if (!append) await loadQualityPrep().catch(() => {})
   const params = currentFilters()
-  if (patchScope) params.set('limit', '200')
-  else params.delete('limit')
+  params.set('limit', patchScope ? '200' : '50')
+  if (patchScope && !append) params.set('with_total', 'true')
+  // Once the server has scored the project, the signal filter runs there, over every patch.
+  const signal = byId('quality-signal-filter').value
+  if (patchScope && state.qualityPrepared && signal) {
+    params.set(signal === 'attention' ? 'quality_suggestion' : 'quality_flag', signal)
+  }
+  if (append) {
+    params.set('after_id', state.qualityCursor.id)
+    if (!patchScope) params.set('after_missing', state.qualityCursor.missing)
+  }
   try {
     const endpoint = patchScope ? 'items' : 'source-images'
     const page = await request(`/api/curation/projects/${state.projectId}/${endpoint}?${params}`)
+    if (runId !== state.qualityRunId) return
     const entries = patchScope ? page.items || [] : page.images || []
+    state.qualityCursor = page.next_cursor ? { id: page.next_cursor, missing: page.next_missing || 0 } : null
+    if (page.total != null) state.qualityTotal = page.total
+    // Scores the server already has (Prepare quality scores): those patches are not analysed here.
+    let stored = {}
+    if (patchScope && entries.length) {
+      try {
+        stored = (await request(`/api/curation/projects/${state.projectId}/quality-scores?item_ids=${entries.map(entry => entry.id).join(',')}`)).scores || {}
+      } catch (_) { stored = {} }
+      if (runId !== state.qualityRunId) return
+    }
     const results = new Array(entries.length)
     let nextIndex = 0
     let completed = 0
@@ -1190,9 +1246,16 @@ async function loadQualityReview() {
           const previewUrl = patchScope
             ? cropPreviewUrl(detail)
             : proxyUrl(detail.source_image_uri)
-          const preview = new Image()
-          preview.src = previewUrl
-          await new Promise(resolve => { preview.onload = resolve; preview.onerror = resolve })
+          const saved = patchScope ? stored[String(entry.id)] : null
+          let quality
+          if (saved) {
+            quality = { score: saved.score, flags: saved.flags, decision: saved.suggestion, metrics: saved.metrics, server: true }
+          } else {
+            const preview = new Image()
+            preview.src = previewUrl
+            await new Promise(resolve => { preview.onload = resolve; preview.onerror = resolve })
+            quality = scoreImageQuality(preview)
+          }
           results[index] = {
             ...entry,
             reviewId: patchScope ? detail.id : detail.first_item_id,
@@ -1201,7 +1264,7 @@ async function loadQualityReview() {
             source_image_uri: detail.source_image_uri,
             image_name: patchScope ? detail.file_name : detail.image_name,
             itemLabel: patchScope ? detail.current_label : null,
-            quality: scoreImageQuality(preview),
+            quality,
             savedDecision: review?.decision || null,
             reviewedBy: review?.reviewed_by || null,
             included: patchScope ? detail.included : detail.items.some(item => item.included),
@@ -1216,17 +1279,69 @@ async function loadQualityReview() {
     }
     await Promise.all(Array.from({ length: Math.min(4, entries.length) }, analyzeNext))
     if (runId !== state.qualityRunId) return
-    state.qualityItems = results.filter(Boolean)
+    state.qualityItems = [...kept, ...results.filter(Boolean)]
     const noun = patchScope ? 'patches' : 'source images'
-    updateQualityProgress(completed, entries.length, entries.length ? `${patchScope ? 'Patch' : 'Source image'} analysis complete` : `No ${noun} match this decision filter`)
+    const loaded = state.qualityItems.length
+    updateQualityProgress(completed, entries.length, loaded ? `${patchScope ? 'Patch' : 'Source image'} analysis complete` : `No ${noun} match these filters`)
     renderQualitySummary(state.qualityItems)
     renderQualityList()
+    renderQualityPaging(noun)
+    if (typeof syncClaims === 'function') syncClaims()  // live.js: the undecided patches loaded here
   } catch (error) {
     if (runId !== state.qualityRunId) return
     updateQualityProgress(0, 0, 'Analysis could not start')
+    if (append) { renderQualityPaging(patchScope ? 'patches' : 'source images'); throw error }
     byId('quality-list').innerHTML = `<div class="quality-empty empty-state"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><strong>Quality analysis failed</strong><p>${escapeHtml(error.message)}</p></div>`
   }
 }
+
+// "Showing N of M" and Load more. Sorting and the signal filter run in the browser, on what is loaded.
+function renderQualityPaging(noun) {
+  const loaded = state.qualityItems.length
+  const total = state.qualityTotal
+  byId('quality-paging-count').textContent = loaded
+    ? `Showing ${fmt(loaded)}${total != null ? ` of ${fmt(total)}` : state.qualityCursor ? '+' : ''} ${noun}${state.qualityCursor ? ' · sorted within the loaded ones' : ''}`
+    : ''
+  byId('quality-load-more').classList.toggle('d-none', !state.qualityCursor)
+  byId('quality-load-more').disabled = false
+}
+
+// Server quality scores (curation/quality.py): how many patches are scored, and the lead's Prepare button.
+let qualityPrepTimer = null
+
+async function loadQualityPrep() {
+  const pid = state.projectId
+  clearTimeout(qualityPrepTimer)
+  const data = await request(`/api/curation/projects/${pid}/quality-scores`)
+  if (state.projectId !== pid) return
+  state.qualityPrepared = data.scored > 0
+  const job = data.job
+  const running = job && ['queued', 'starting', 'running'].includes(job.status)
+  const scored = data.scored ? `Quality scores prepared for ${fmt(data.scored)} of ${fmt(data.items)} patches` +
+    `${data.average != null ? ` (average ${data.average})` : ''}; the signal filter covers all of them.` : ''
+  byId('quality-prep-text').textContent = running
+    ? `Preparing quality scores… ${fmt(job.processed || 0)} of ${fmt(job.total || data.items)} patches checked.`
+    : scored || 'Scores are worked out in the browser for the loaded patches only. A project lead can prepare them once for every patch.'
+  if (job && ['failed', 'interrupted'].includes(job.status) && !running) {
+    byId('quality-prep-text').textContent += ` The last run ${job.status}${job.error ? `: ${job.error}` : ''}; Prepare again continues where it stopped.`
+  }
+  const button = byId('quality-prep-button')
+  button.textContent = data.scored && data.scored < data.items ? 'Score the rest' : data.scored ? 'Score new or moved patches' : 'Prepare quality scores'
+  button.disabled = running || !canDo('project-lead')
+  if (running) qualityPrepTimer = setTimeout(() => { if (state.view === 'quality') loadQualityPrep().catch(() => {}) }, 4000)
+}
+
+byId('quality-prep-button').addEventListener('click', async () => {
+  const button = byId('quality-prep-button')
+  button.disabled = true
+  try {
+    await request(`/api/curation/projects/${state.projectId}/quality-scores`, { method: 'POST' })
+    await loadQualityPrep()
+  } catch (error) {
+    button.disabled = false
+    showNotice(error.message)
+  }
+})
 
 function renderQualitySummary(items) {
   const total = items.length
@@ -1266,7 +1381,8 @@ function renderQualityList() {
   const list = byId('quality-list')
   const signal = byId('quality-signal-filter').value
   const sort = byId('quality-sort').value
-  const items = state.qualityItems.filter(item => !signal || item.quality.flags.includes(signal)).sort((left, right) => {
+  const items = state.qualityItems.filter(item => !signal ||
+    (signal === 'attention' ? item.quality.decision !== 'accept' : item.quality.flags.includes(signal))).sort((left, right) => {
     if (sort === 'score_desc') return right.quality.score - left.quality.score
     if (sort === 'sharpness_asc') return (left.quality.metrics?.sharpness ?? -1) - (right.quality.metrics?.sharpness ?? -1)
     if (sort === 'brightness_asc') return (left.quality.metrics?.brightness ?? -1) - (right.quality.metrics?.brightness ?? -1)
@@ -1283,7 +1399,7 @@ function renderQualityList() {
     const recommendation = quality.decision === 'accept' ? 'Looks usable' : quality.decision === 'reject' ? 'Recommend reject' : 'Review recommended'
     const metrics = quality.metrics
     const patchScope = item.qualityScope === 'patch'
-    const context = patchScope ? `${escapeHtml(item.itemLabel || 'Unlabeled')} patch` : `${item.annotation_count || 0} annotation points`
+    const context = patchScope ? `${escapeHtml(item.itemLabel || 'Unlabeled')} patch${item.split ? ` · ${escapeHtml(item.split)}` : ''}` : `${item.annotation_count || 0} annotation points`
     return `<article class="quality-card ${patchScope ? 'quality-card-patch' : ''}">
       <img src="${item.previewUrl || proxyUrl(item.source_image_uri)}" alt="${escapeHtml(item.image_name)} quality preview" loading="lazy">
       <div class="quality-card-body">
@@ -1386,8 +1502,13 @@ async function applyQualityRecommendations(decision) {
   await Promise.all([loadQualityReview(), loadStats()])
 }
 
-byId('quality-filter').addEventListener('change', loadQualityReview)
-byId('quality-signal-filter').addEventListener('change', renderQualityList)
+byId('quality-filter').addEventListener('change', () => loadQualityReview())
+byId('quality-load-more').addEventListener('click', () => loadQualityReview(true).catch(error => showNotice(error.message)))
+byId('quality-signal-filter').addEventListener('change', () => {
+  // Scored on the server: filter every patch there. Otherwise only the loaded ones, here.
+  if (state.qualityPrepared && state.qualityScope === 'patch') loadQualityReview().catch(error => showNotice(error.message))
+  else renderQualityList()
+})
 byId('quality-sort').addEventListener('change', renderQualityList)
 byId('quality-accept-all').addEventListener('click', () => applyQualityRecommendations('accept'))
 byId('quality-reject-all').addEventListener('click', () => applyQualityRecommendations('reject'))
@@ -1595,7 +1716,7 @@ function renderMatrixEmptyState() {
   box.innerHTML = `<div class="matrix-empty"><strong>${unfinished ? 'The last evaluation did not finish' : 'No evaluation yet'}</strong>
     <p>${unfinished ? `${escapeHtml(unfinished.error_message || unfinished.status)}. ` : ''}The matrix compares a classifier's predictions with this project's labels. Scoring one needs:</p>
     <ul class="matrix-empty-steps">${steps.map(([done, label, hint]) => `<li class="${done ? 'done' : ''}"><i class="bi ${done ? 'bi-check-circle-fill' : 'bi-circle'}"></i> ${label}${done ? '' : ` <small>(${hint})</small>`}</li>`).join('')}</ul>
-    <p>${starterPending ? 'For this starter project that happens by itself: when the import finishes, v1 is published and the T3 classifier is scored on test and val.'
+    <p>${starterPending ? 'For this starter project that happens by itself: when the import finishes, v1 is published and the T3 classifier is scored on train, val and test.'
       : 'Then start an evaluation under <b>Models and evaluation runs</b> below.'}</p></div>`
   byId('evaluation-tools').open = !starterPending
 }
@@ -1733,7 +1854,7 @@ function resetMatrixZoom() {
 function applyMatrixDrilldown(actual, predicted) {
   resetSourceWorkspace()
   if (state.matrix?.drilldown_kind === 'evaluation_predictions') {
-    state.matrixFilter = { actualAxis: 'source', actual, predicted, evaluation: true }
+    state.matrixFilter = { actualAxis: 'source', actual, predicted, evaluation: true, runId: selectedRunId() }
     state.matrixLinkedItemIds = []
     state.evaluationSplit = byId('evaluation-split').value
     byId('evaluation-evidence-kind').value = 'predictions'
@@ -1769,7 +1890,108 @@ function renderMatrixDrilldown() {
   if (filter.label) parts.push(filter.label)
   if (filter.actual) parts.push(`Actual (${filter.actualAxis}): ${filter.actual}`)
   if (filter.predicted) parts.push(`Predicted: ${filter.predicted}`)
+  if (filter.runId) parts.push(`${state.evaluationSplit === 'val' ? 'Validation' : state.evaluationSplit} split`)
   byId('matrix-drilldown-text').textContent = `Matrix drilldown · ${parts.join(' · ')}`
+  byId('matrix-to-quality').classList.toggle('d-none', state.view === 'quality')
+  byId('matrix-cleanup').classList.toggle('d-none', !cleanupCell())
+}
+
+// ── Clean-up from the matrix (curation/cleanup.py): one action for a whole off-diagonal cell ─────────────
+let cleanupPreview = null
+
+function cleanupCell() {
+  const filter = state.matrixFilter
+  if (!filter?.runId || !filter.actual || !filter.predicted || filter.actual === filter.predicted) return null
+  return { runId: filter.runId, actual: filter.actual, predicted: filter.predicted }
+}
+
+function cleanupSplits() {
+  return [...document.querySelectorAll('[data-cleanup-split]')].filter(box => box.checked).map(box => box.dataset.cleanupSplit)
+}
+
+async function loadCleanupPreview() {
+  const cell = cleanupCell()
+  const splits = cleanupSplits()
+  cleanupPreview = null
+  document.querySelectorAll('[data-cleanup-action]').forEach(button => { button.disabled = true })
+  if (!cell || !splits.length) { byId('cleanup-preview').textContent = 'Choose at least one split.'; return }
+  const base = `/api/curation/projects/${state.projectId}/evaluations/${cell.runId}/cleanup`
+  const query = new URLSearchParams({ splits: splits.join(',') })
+  const [preview, tally] = await Promise.all([
+    request(`${base}?${new URLSearchParams({ actual: cell.actual, predicted: cell.predicted, splits: splits.join(',') })}`),
+    request(`${base}/tally?${query}`),
+  ])
+  cleanupPreview = preview
+  const perSplit = Object.entries(preview.by_split).map(([split, entry]) => `${split} ${fmt(entry.patches)}`).join(' · ')
+  byId('cleanup-preview').textContent = preview.patches
+    ? `${fmt(preview.patches)} patches (${perSplit}) · cleaned ${fmt(preview.cleaned)} of ${fmt(preview.patches)}.`
+    : 'No patches of this cell in these splits.'
+  const own = tally.classes.find(entry => entry.actual === cell.actual)
+  byId('cleanup-class-tally').textContent = own
+    ? `${cell.actual} overall: cleaned ${fmt(own.cleaned)} of ${fmt(own.patches)} confused patches; whole matrix: ${fmt(tally.cleaned)} of ${fmt(tally.patches)}.`
+    : ''
+  document.querySelectorAll('[data-cleanup-action]').forEach(button => { button.disabled = !preview.patches || !canDo('project-curator') })
+}
+
+async function openCleanup() {
+  const cell = cleanupCell()
+  if (!cell) return
+  byId('cleanup-subtitle').textContent = `${cell.actual} called ${cell.predicted}`
+  byId('cleanup-relabel').textContent = `Relabel to ${cell.predicted}`
+  byId('cleanup-message').textContent = ''
+  byId('cleanup-dialog').showModal()
+  await loadCleanupPreview().catch(error => { byId('cleanup-preview').textContent = error.message })
+}
+
+const CLEANUP_VERBS = { relabel: 'Relabel', exclude: 'Exclude', flag: 'Flag for a re-split' }
+
+async function applyCleanup(action) {
+  const cell = cleanupCell()
+  const preview = cleanupPreview
+  if (!cell || !preview) return
+  const todo = preview.patches - preview.cleaned
+  const testInformed = preview.splits.includes('test')
+  const ok = await window.OF.ui.confirm({
+    title: `${CLEANUP_VERBS[action]} ${fmt(todo)} patches?`,
+    message: `${cell.actual} patches the model called ${cell.predicted}, in ${preview.splits.join(', ')}.` +
+      (action === 'relabel' ? ` Their label becomes ${cell.predicted}.` : '') +
+      (testInformed ? ' Test patches are included: this is a test-informed change and only affects a future dataset version.' : ''),
+    confirmLabel: CLEANUP_VERBS[action], danger: action === 'exclude' || testInformed,
+  })
+  if (!ok) return
+  const message = byId('cleanup-message')
+  try {
+    const result = await request(`/api/curation/projects/${state.projectId}/evaluations/${cell.runId}/cleanup`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actual: cell.actual, predicted: cell.predicted, action, splits: preview.splits,
+        watermark: preview.watermark, confirm_test: testInformed }),
+    })
+    const notes = [`Done: ${fmt(result.applied)} changed`]
+    if (result.already) notes.push(`${fmt(result.already)} already were`)
+    if (result.conflict_count) notes.push(`${fmt(result.conflict_count)} changed by someone since the preview, left alone`)
+    message.textContent = `${notes.join('; ')}.`
+    message.className = 'small mt-2 mb-0 text-success'
+    await loadCleanupPreview()
+    if (state.matrixFilter?.evaluation && typeof loadMatrixAssets === 'function') loadMatrixAssets(false).catch(() => {})
+  } catch (error) {
+    message.textContent = error.message
+    message.className = 'small mt-2 mb-0 text-danger'
+  }
+}
+
+// The cell's patches in Quality review, every decision shown; clearing the matrix filter there
+// leaves the other filters, so the same view then shows every patch.
+function openMatrixInQuality() {
+  const from = state.view
+  if (state.qualityScope !== 'patch') {
+    state.qualityScope = 'patch'
+    document.querySelectorAll('[data-quality-scope]').forEach(button => {
+      button.classList.toggle('active', button.dataset.qualityScope === 'patch')
+      button.setAttribute('aria-selected', String(button.dataset.qualityScope === 'patch'))
+    })
+  }
+  byId('quality-filter').value = ''
+  return setView('quality', from === 'quality' ? null : makeBackTarget(from))
 }
 
 async function loadMatrixAssets(append) {
@@ -2214,6 +2436,7 @@ async function selectImage(firstItemId, selectedItemId = null) {
   byId('annotation-table-panel').classList.remove('d-none')
   renderImageFacts()
   if (detail.items.length) selectItem(selectedItemId || detail.items[0].id)
+  if (typeof claimOpenedImage === 'function') await claimOpenedImage()  // live.js
   return true
 }
 
@@ -2759,7 +2982,10 @@ async function saveAndNext(changes = {}) {
   if (!(await saveItem())) return
   const next = state.items[state.items.findIndex(row => row.id === item.id) + 1]
   if (next) selectItem(next.id)
-  else if (typeof stepImage === 'function') await stepImage(1)
+  else if (typeof stepImage === 'function') {
+    await stepImage(1)
+    if (typeof skipHeldImages === 'function') await skipHeldImages(1)  // past images another curator has open
+  }
 }
 
 async function createProject(event) {
@@ -2849,6 +3075,7 @@ byId('crop-view-button').addEventListener('click', () => setView('crop'))
 byId('status-view-button').addEventListener('click', () => setView('status'))
 byId('matrix-view-button').addEventListener('click', () => setView('matrix'))
 byId('versions-view-button').addEventListener('click', () => setView('versions'))
+byId('activity-view-button').addEventListener('click', () => setView('activity'))
 byId('refresh-preview').addEventListener('click', loadVersions)
 byId('publish-form').addEventListener('submit', publishVersion)
 byId('refresh-crops').addEventListener('click', () => loadCrops(false))
@@ -2897,6 +3124,12 @@ byId('matrix-zoom-out').addEventListener('click', () => zoomMatrix(1 / 1.2))
 byId('matrix-fit').addEventListener('click', fitMatrixToWidth)
 byId('matrix-reset-zoom').addEventListener('click', resetMatrixZoom)
 byId('clear-matrix-drilldown').addEventListener('click', clearMatrixDrilldown)
+byId('matrix-to-quality').addEventListener('click', openMatrixInQuality)
+byId('matrix-cleanup').addEventListener('click', () => openCleanup().catch(error => showNotice(error.message)))
+document.querySelectorAll('[data-cleanup-split]').forEach(box => box.addEventListener('change',
+  () => loadCleanupPreview().catch(error => { byId('cleanup-preview').textContent = error.message })))
+document.querySelectorAll('[data-cleanup-action]').forEach(button => button.addEventListener('click',
+  () => applyCleanup(button.dataset.cleanupAction)))
 byId('close-evaluation-drilldown').addEventListener('click', clearMatrixDrilldown)
 byId('load-more-evaluation').addEventListener('click', () => loadMatrixAssets(true))
 document.querySelectorAll('[data-matrix-split]').forEach(button => button.addEventListener('click', async () => {
@@ -2983,6 +3216,7 @@ async function switchProject(projectId) {
   resetSourceWorkspace()
   renderProjectMode()
   renderTaxonomyOptions()
+  if (typeof resetChangeFeed === 'function') await resetChangeFeed()  // live.js: before any list loads
   await loadEvaluationCatalog()
   setView(state.pendingView || 'matrix')
   state.pendingView = null
@@ -3001,7 +3235,7 @@ byId('filter-image').addEventListener('keydown', event => { if (event.key === 'E
 byId('clear-filters').addEventListener('click', clearFilters)
 byId('export-button').addEventListener('click', exportFiltered)
 byId('delete-project-button').addEventListener('click', deleteProject)
-;['filter-region', 'filter-island', 'filter-year', 'filter-site', 'filter-annotator', 'filter-origin', 'filter-state', 'filter-included', 'filter-hide-missing', 'filter-show-removed'].forEach(id => byId(id).addEventListener('change', cascadeFilters))
+;['filter-region', 'filter-island', 'filter-year', 'filter-site', 'filter-annotator', 'filter-origin', 'filter-state', 'filter-included', 'filter-split', 'filter-hide-missing', 'filter-show-removed', 'filter-hide-handled', 'filter-hide-claimed'].forEach(id => byId(id).addEventListener('change', cascadeFilters))
 byId('overlay-mode').addEventListener('change', renderMarkers)
 byId('add-point-mode').addEventListener('click', () => { state.addPointMode = !state.addPointMode; byId('add-point-mode').classList.toggle('active', state.addPointMode) })
 byId('close-point-dialog').addEventListener('click', () => byId('point-dialog').close())

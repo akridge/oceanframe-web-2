@@ -9,7 +9,7 @@
     // view, the tab's label, its icon, and other words people search by (matched, not shown).
     ['source', 'Source images', 'bi-bounding-box', 'points review'], ['crop', 'Crop grid', 'bi-grid-3x3-gap', 'crops patches'],
     ['quality', 'Quality review', 'bi-eye', 'blur'], ['status', 'Dataset status', 'bi-bar-chart', 'missing stats'],
-    ['matrix', 'Confusion matrix', 'bi-grid', 'evaluation'], ['versions', 'Versions', 'bi-layers', 'history publish releases'],
+    ['matrix', 'Confusion matrix', 'bi-grid', 'evaluation'], ['versions', 'Versions', 'bi-layers', 'history publish releases'], ['activity', 'Activity', 'bi-people', 'online who presence team'],
   ]
 
   async function goTo(projectId, view) {

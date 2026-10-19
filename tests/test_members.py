@@ -15,18 +15,46 @@ def _user_id(team, name):
     return me["id"]
 
 
-def test_creator_leads_and_non_members_are_read_only(team):
+def _restrict(client, pid, restricted=True):
+    response = client.put(f"{P}/projects/{pid}/access", json={"restricted": restricted})
+    assert response.status_code == 200, response.text
+
+
+def test_projects_are_open_to_curator_accounts_and_viewers_read(team):
     project = _project_as(team["ana"], "Ana's reef")  # ana is an app-wide curator: may create
     assert project["my_role"] == "lead"
     pid = project["id"]
     item = _add(team["ana"], pid, _item_payload("m-1", "ACBR"))
-    # Ben (curator app-wide) is not a member: can read, cannot edit
+    # Ben (curator app-wide) is not a member: on an open project he curates, but does not lead
+    assert {p["id"]: p["my_role"] for p in team["ben"].get(f"{P}/projects").json()}[pid] == "curator"
+    edit = team["ben"].patch(f"{P}/projects/{pid}/items/{item['id']}", json={"expected_revision": 1, "included": False})
+    assert edit.status_code == 200, edit.text
+    assert team["ben"].post(f"{P}/projects/{pid}/versions", json={}).status_code == 403
+    assert team["ben"].put(f"{P}/projects/{pid}/access", json={"restricted": True}).status_code == 403
+    # Vic (viewer app-wide) reads only, and is told why
+    assert team["vic"].get(f"{P}/projects/{pid}/items").status_code == 200
+    refused = team["vic"].patch(f"{P}/projects/{pid}/items/{item['id']}", json={"expected_revision": 2, "included": True})
+    assert refused.status_code == 403 and "view-only" in refused.json()["detail"]
+    assert {p["id"]: p["my_role"] for p in team["vic"].get(f"{P}/projects").json()}.get(pid) is None
+
+
+def test_a_members_only_project_is_read_only_to_non_members(team):
+    pid = _project_as(team["ana"], "Ana's private reef")["id"]
+    item = _add(team["ana"], pid, _item_payload("m-1b", "ACBR"))
+    team["ana"].post(f"{P}/projects/{pid}/members", json={"username": "vic", "role": "curator"})
+    _restrict(team["ana"], pid)
     assert team["ben"].get(f"{P}/projects/{pid}/items").status_code == 200
     edit = team["ben"].patch(f"{P}/projects/{pid}/items/{item['id']}", json={"expected_revision": 1, "included": False})
     assert edit.status_code == 403
-    assert "Ana" in edit.json()["detail"]  # names a lead to ask
-    listed = {p["id"]: p["my_role"] for p in team["ben"].get(f"{P}/projects").json()}
-    assert listed[pid] is None
+    assert "members-only" in edit.json()["detail"] and "Ana" in edit.json()["detail"]  # names a lead to ask
+    assert {p["id"]: p["my_role"] for p in team["ben"].get(f"{P}/projects").json()}.get(pid) is None
+    # members keep their role, even an app-wide viewer
+    assert team["vic"].patch(f"{P}/projects/{pid}/items/{item['id']}",
+                             json={"expected_revision": 1, "included": False}).status_code == 200
+    project = next(p for p in team["ana"].get(f"{P}/projects").json() if p["id"] == pid)
+    assert project["source_config"]["restricted"] is True
+    _restrict(team["ana"], pid, False)
+    assert {p["id"]: p["my_role"] for p in team["ben"].get(f"{P}/projects").json()}[pid] == "curator"
 
 
 def test_lead_adds_members_and_project_roles_override_app_roles(team):
@@ -62,7 +90,7 @@ def test_admins_act_as_lead_everywhere_and_app_leads_do_not(team):
     assert {p["id"]: p["my_role"] for p in team["admin"].get(f"{P}/projects").json()}[pid] == "lead"
     assert team["admin"].post(f"{P}/projects/{pid}/members", json={"username": "ben", "role": "curator"}).status_code == 201
     item = _add(team["ana"], pid, _item_payload("lead-1", "ACBR"))
-    # an app-wide lead who is not a member: no publishing, no editing
+    # an app-wide lead who is not a member: curates an open project, but does not lead it
     created = team["admin"].post("/api/auth/admin/users", json={
         "username": "lou", "password": "pass-word-1", "role": "lead", "display_name": "Lou"})
     assert created.status_code == 200, created.text
@@ -72,6 +100,9 @@ def test_admins_act_as_lead_everywhere_and_app_leads_do_not(team):
     assert lou.post("/api/auth/login", json={"username": "lou", "password": "pass-word-1"}).status_code == 200
     assert lou.get("/api/auth/me").json()["user"]["role"] == "lead"
     assert lou.post(f"{P}/projects/{pid}/versions", json={}).status_code == 403
+    assert {p["id"]: p["my_role"] for p in lou.get(f"{P}/projects").json()}[pid] == "curator"
+    # members-only: no editing either
+    _restrict(team["admin"], pid)
     edit = lou.patch(f"{P}/projects/{pid}/items/{item['id']}", json={"expected_revision": item["revision"], "included": False})
     assert edit.status_code == 403, edit.text
     assert team["ana"].patch(f"{P}/projects/{pid}/items/{item['id']}",   # the same revision still applies for a member
