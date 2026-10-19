@@ -123,9 +123,11 @@ export function renderStatusChips(status) {
   if (!assets || !embedderChip) return;
   const stats = status.stats;
   const embedder = status.embedder || {};
-  assets.textContent = `${count(stats.ok)} assets · ${count(stats.folders)} folders · ${bytes(stats.bytes)}`;
+  // Library-wide, unlike the result count beside it.
+  assets.textContent = `library: ${count(stats.ok)} assets · ${count(stats.folders)} folders · ${bytes(stats.bytes)}`;
   embedderChip.textContent = embedder.supports_text
     ? `semantic search on (${embedder.backend})`
     : 'image similarity only';
   embedderChip.title = embedder.detail || '';
+  assets.title = 'Everything indexed, whatever the filters';
 }

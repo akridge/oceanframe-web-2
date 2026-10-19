@@ -36,6 +36,24 @@ export function createDetail() {
     renderTags(asset);
     renderDetections(asset);
     renderSimilar(asset);
+    renderCuration(asset);
+  }
+
+  /** One link per curation project this image is a patch of, matched by its crop URI. */
+  async function renderCuration(asset) {
+    const box = clear($('detail-curation'));
+    box.classList.add('hidden');
+    const links = await api.curationLinks(asset.uri).catch(() => []);
+    if (currentId !== asset.id || !links.length) return;
+    for (const link of links) {
+      const hash = new URLSearchParams({ project: link.project_id, view: 'source', image: link.item_id, item: link.item_id });
+      box.append(el('a', {
+        class: 'btn btn-secondary btn-sm', href: `/curation#${hash}`,
+        title: `Patch #${link.item_id} · ${[link.split, link.label].filter(Boolean).join(' · ')}`,
+        text: `Open in curation · ${link.project_name}`,
+      }));
+    }
+    box.classList.remove('hidden');
   }
 
   function renderQuality(asset) {

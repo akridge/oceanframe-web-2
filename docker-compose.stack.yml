@@ -251,7 +251,7 @@ services:
       python -m pytest -q tests/test_auth.py tests/test_curation.py tests/test_editing.py tests/test_oasis_import.py
       tests/test_versions.py tests/test_evaluations.py tests/test_appdb_backend.py
       tests/test_registry.py tests/test_hub_evaluation.py tests/test_breakdown.py
-      tests/test_version_compare.py tests/test_collab_schema.py tests/test_members.py tests/test_change_sets.py tests/test_people_compare.py tests/test_project_compare.py tests/test_releases.py tests/test_availability.py tests/test_starter_data.py tests/test_claims.py tests/test_curation_quality.py tests/test_matrix_cleanup.py"
+      tests/test_version_compare.py tests/test_collab_schema.py tests/test_members.py tests/test_change_sets.py tests/test_people_compare.py tests/test_project_compare.py tests/test_releases.py tests/test_availability.py tests/test_starter_data.py tests/test_claims.py tests/test_curation_quality.py tests/test_matrix_cleanup.py tests/test_library_links.py"
     networks: [oceanframe-net]
 
 volumes:

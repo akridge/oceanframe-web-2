@@ -657,3 +657,11 @@ textarea.tag-input { resize: vertical; font-family: inherit; }
 .form-section legend .icon { color: var(--accent); width: 16px; height: 16px; }
 .inport-section { border-color: var(--accent-tint); background: linear-gradient(180deg, var(--accent-tint) 0%, var(--surface-1) 60%); }
 .inport-section legend .icon { color: var(--accent-text); }
+
+/* Loading feedback: the grid dims until the newest search lands; rail counts fade until theirs do. */
+.asset-grid { transition: opacity 120ms ease; }
+.asset-grid.loading { opacity: 0.45; pointer-events: none; }
+.result-count.loading { color: var(--accent-text); }
+.folder-tree.stale, .facet-list.stale, .source-filter.stale { opacity: 0.5; transition: opacity 120ms ease; }
+.empty-state .empty-filters { margin: 6px 0 10px; font-size: 13px; }
+.filter-chip.search-chip { font-style: italic; }

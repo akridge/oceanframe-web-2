@@ -2476,6 +2476,7 @@ function selectItem(itemId, { keepTab = false } = {}) {
   byId('current-label').value = item.current_label
   byId('source-label').textContent = item.source_label
   renderItemMetadata(item)
+  loadLibraryLinks(item)
   byId('review-state').value = item.review_state
   byId('item-included').checked = item.included
   byId('edit-reason').value = ''
@@ -2485,6 +2486,32 @@ function selectItem(itemId, { keepTab = false } = {}) {
   drawSelectedCrop()
   renderAnnotationTable()
   if (typeof syncPointTools === 'function') syncPointTools()
+}
+
+// "View in library" for a patch the image library has indexed (matched by its crop URI).
+async function loadLibraryLinks(item) {
+  const box = byId('library-links')
+  box.replaceChildren()
+  box.classList.add('d-none')
+  let assets = []
+  try {
+    assets = (await request(`/api/curation/projects/${state.projectId}/items/${item.id}/library`)).assets
+  } catch {
+    return
+  }
+  if (state.selected?.id !== item.id || !assets.length) return
+  box.append('Library: ')
+  assets.forEach((asset, index) => {
+    const link = document.createElement('a')
+    link.href = `/#q=${encodeURIComponent(JSON.stringify({ source_id: asset.source_id }))}&asset=${asset.asset_id}`
+    link.target = '_blank'
+    link.rel = 'noopener'
+    link.title = asset.uri
+    link.textContent = `View in ${asset.source}`
+    if (index) box.append(' · ')
+    box.append(link)
+  })
+  box.classList.remove('d-none')
 }
 
 function labelColor(label) {

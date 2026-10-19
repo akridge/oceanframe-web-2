@@ -184,12 +184,19 @@ def add_source(body: SourceIn) -> dict:
     db.init_db()
     if body.model_ref and not modelcache.is_allowed(body.model_ref):
         raise HTTPException(400, f"Model '{body.model_ref}' is not in the allowlist.")
+    retag = indexer.pattern_changes(body.root, body.tag_pattern)
     source_id, root = indexer.ensure_source(
         body.root, body.label, body.tag_pattern, body.model_ref
     )
     if body.meta is not None:
         _apply_meta(source_id, body.meta)
-    return {"id": source_id, "root": root}
+    result = {"id": source_id, "root": root}
+    if retag:
+        # Existing images keep the old rule's tags until they are re-derived from their paths.
+        job = jobs.start_job("retag", {"source_id": source_id},
+                             lambda j: {"tagged": indexer.retag_paths(source_id, j)})
+        result["retag_job"] = job.to_dict()
+    return result
 
 
 def _apply_meta(source_id: int, meta: SourceMetaIn) -> dict:
@@ -278,16 +285,23 @@ def start_index(body: IndexIn, user: CurrentUser = Depends(require_lead)) -> dic
         raise HTTPException(409, "An index job is already running.")
     if body.model_ref and not modelcache.is_allowed(body.model_ref):
         raise HTTPException(400, f"Model '{body.model_ref}' is not in the allowlist.")
+    # Storing the rule here would hide the change from index_source, so the re-tag is decided now.
+    retag = indexer.pattern_changes(root, body.tag_pattern) if body.meta is not None else None
     if body.meta is not None:
         source_id, _ = indexer.ensure_source(root, body.label, body.tag_pattern, body.model_ref)
         _apply_meta(source_id, body.meta)
-    job = jobs.start_job(
-        "index",
-        {"root": root, "force": body.force, "limit": body.limit, "user": user.username},
-        lambda j: indexer.index_source(
+
+    def run(j):
+        if retag:
+            indexer.retag_paths(retag)
+            j.log("Path-tag rule changed — existing images re-tagged from their paths")
+        return indexer.index_source(
             j, root, force=body.force, limit=body.limit, label=body.label,
             prune=body.prune, tag_pattern=body.tag_pattern, model_ref=body.model_ref,
-        ),
+        )
+
+    job = jobs.start_job(
+        "index", {"root": root, "force": body.force, "limit": body.limit, "user": user.username}, run,
     )
     return job.to_dict()
 

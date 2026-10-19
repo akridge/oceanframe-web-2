@@ -2,12 +2,20 @@
 import { el, clear, $, band, count } from './ui.js';
 import { state, toggleSelected, selectMany, clearSelection, emit } from './state.js';
 
-export function createGrid({ onOpen }) {
+export function createGrid({ onOpen, activeFilters = () => [] }) {
   const grid = $('grid');
   const empty = $('grid-empty');
 
+  /** From the start of a search until the newest one lands; the old tiles stay, dimmed. */
+  function setLoading(on) {
+    grid.classList.toggle('loading', on);
+    $('result-count').classList.toggle('loading', on);
+    if (on) $('result-count').textContent = 'Searching…';
+  }
+
   function render() {
     const { items, total, matched, note } = state.results;
+    setLoading(false);
     clear(grid);
 
     $('result-count').textContent = state.query.similar_to || state.query.vector
@@ -18,6 +26,15 @@ export function createGrid({ onOpen }) {
     if (!items.length) {
       empty.classList.remove('hidden');
       clear(empty).append(el('p', { text: emptyMessage() }));
+      const filters = state.status && state.status.stats.assets ? activeFilters() : [];
+      if (filters.length) {
+        // Say which filters emptied it, and undo the newest in one click.
+        const [lastText, dropLast] = filters[filters.length - 1];
+        empty.append(
+          el('p', { class: 'empty-filters', text: `Filters: ${filters.map(([text]) => text).join(' · ')}` }),
+          el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: `Remove “${lastText}”`, onclick: dropLast }),
+        );
+      }
       updatePager();
       return;
     }
@@ -96,5 +113,5 @@ export function createGrid({ onOpen }) {
   $('page-prev').addEventListener('click', () => { state.query.page -= 1; emit('query'); });
   $('page-next').addEventListener('click', () => { state.query.page += 1; emit('query'); });
 
-  return { render };
+  return { render, setLoading };
 }

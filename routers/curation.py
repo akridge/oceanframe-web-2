@@ -592,6 +592,44 @@ def quality_scores(project_id: str, item_ids: Optional[str] = None, db: Session 
     return quality.summary(db, project_id)
 
 
+@router.get("/library-links")
+def library_links(uri: str = Query(..., min_length=3, max_length=2048), user: CurrentUser = Depends(current_user),
+                  db: Session = Depends(get_db)):
+    """The curation patches a library image is: its URI is one of their crop candidates (label folder + file name)."""
+    parts = uri.rstrip("/").split("/")
+    if len(parts) < 2:
+        return {"links": []}
+    roles = members.roles_for(db, user)
+    projects = [p for p in db.scalars(select(CurationProject)).all() if p.id in roles or not members.is_restricted(p)]
+    links = []
+    for project in projects:
+        rows = db.scalars(select(CurationItem).where(
+            CurationItem.project_id == project.id, CurationItem.source_label == parts[-2],
+            CurationItem.file_name == parts[-1]).order_by(CurationItem.id).limit(20)).all()
+        links.extend({"project_id": project.id, "project_name": project.name, "item_id": item.id,
+                      "label": item.current_label, "split": item.split}
+                     for item in rows if uri in images.crop_candidates(item, project))
+    return {"links": links}
+
+
+@router.get("/projects/{project_id}/items/{item_id}/library")
+def item_library_assets(project_id: str, item_id: int, db: Session = Depends(get_db)):
+    """Library images that are this patch, looked up by its crop candidates."""
+    from library import db as library_db
+
+    project = service.get_project_or_404(db, project_id)
+    item = service.get_item_or_404(db, project_id, item_id, "Item not found")
+    uris = [uri for uri in dict.fromkeys(images.crop_candidates(item, project)) if uri]
+    if not uris:
+        return {"assets": []}
+    library_db.init_db()
+    rows = library_db.connect().execute(
+        f"SELECT a.id, a.uri, a.source_id, s.label FROM assets a JOIN sources s ON s.id = a.source_id "
+        f"WHERE a.status = 'ok' AND a.uri IN ({','.join('?' * len(uris))})", uris).fetchall()
+    return {"assets": [{"asset_id": r["id"], "uri": r["uri"], "source_id": r["source_id"], "source": r["label"]}
+                       for r in rows]}
+
+
 @router.get("/projects/{project_id}/source-images/{first_item_id}", response_model=CurationSourceImageDetail)
 def get_source_image(project_id: str, first_item_id: int, db: Session = Depends(get_db)):
     anchor = service.get_item_or_404(db, project_id, first_item_id, "Source image not found")

@@ -34,6 +34,10 @@ export const api = {
   folders:      (query, prefix)  => json('/folders', { query, prefix }),
   duplicates:   (query, limit)   => json('/duplicates', { query, limit }),
   asset:        id               => request(`/asset/${id}`),
+  curationLinks: async uri      => {
+    const res = await authFetch(`/api/curation/library-links?uri=${encodeURIComponent(uri)}`);
+    return res.ok ? (await res.json()).links : [];
+  },
 
   addSource:    body             => json('/sources', body),
   source:       id               => request(`/sources/${id}`),

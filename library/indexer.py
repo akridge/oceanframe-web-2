@@ -159,6 +159,58 @@ def source_tag_pattern(source_id: int) -> str:
     return stored or settings.PATH_TAG_PATTERN
 
 
+def pattern_changes(root: str, tag_pattern: str | None) -> int | None:
+    """The id of an existing source whose path-tag rule ``tag_pattern`` would change, else None."""
+    if tag_pattern is None:
+        return None
+    row = db.connect().execute(
+        "SELECT id, tag_pattern FROM sources WHERE root = ?", (normalise_root(root),)
+    ).fetchone()
+    return int(row["id"]) if row and (row["tag_pattern"] or "") != tag_pattern else None
+
+
+def retag_paths(source_id: int, job: Job | None = None) -> int:
+    """
+    Recompute the path-derived tags of every asset in a source from its stored
+    folder and name, after its rule changed.  Nothing is downloaded or re-embedded.
+    Returns how many assets carry a path tag afterwards.
+    """
+    pattern = source_tag_pattern(source_id)
+    rows = db.connect().execute(
+        "SELECT id, folder, name FROM assets WHERE source_id = ? ORDER BY id", (source_id,)
+    ).fetchall()
+    if job:
+        job.set_total(len(rows))
+        job.log(f"Re-tagging {len(rows):,} images from their paths")
+    tagged = 0
+    tag_ids: dict[str, int] = {}
+    for start in range(0, len(rows), 900):                # SQLite bound-variable limit
+        chunk = rows[start:start + 900]
+        ids = [r["id"] for r in chunk]
+        with db.write() as conn:
+            tags.clear_origin(conn, ids, "path")
+            pairs = []
+            for r in chunk:
+                key = f"{r['folder']}/{r['name']}" if r["folder"] else r["name"]
+                derived = tags.path_tags(key, pattern)
+                tagged += bool(derived)
+                for name in derived:
+                    if name not in tag_ids:
+                        tag_ids[name] = tags.ensure_tag(conn, name, "path")
+                    pairs.append((r["id"], tag_ids[name], 1.0, "path"))
+            conn.executemany(
+                "INSERT INTO asset_tags(asset_id, tag_id, score, origin) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(asset_id, tag_id) DO UPDATE SET score=excluded.score, origin=excluded.origin",
+                pairs,
+            )
+            db.fts_refresh(conn, ids)
+        if job:
+            if job.cancelled:
+                break
+            job.advance(len(chunk), f"{tagged:,} images tagged")
+    return tagged
+
+
 def source_model_ref(source_id: int) -> str:
     """The collection's own detection model, falling back to the global default."""
     row = db.connect().execute("SELECT model_ref FROM sources WHERE id = ?", (source_id,)).fetchone()
@@ -389,8 +441,13 @@ def index_source(
                else "Check the path exists and is a directory.")
         )
 
+    retag = pattern_changes(root, tag_pattern)
     source_id, root = ensure_source(root, label, tag_pattern, model_ref)
     pattern = source_tag_pattern(source_id)
+    if retag:
+        # New and changed images are tagged as they index; the rest only need their paths.
+        retag_paths(source_id)
+        job.log("Path-tag rule changed — existing images re-tagged from their paths")
     embedder = get_embedder()
     store = get_store()
     wiped = store.ensure_model(embedder.dim, embedder.name)

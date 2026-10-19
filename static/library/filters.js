@@ -4,6 +4,10 @@
  * The tree is a facet, not a file browser — every count is recomputed against
  * the current query, so drilling into 2024/kaneohe tells you how many *matching*
  * images are down each branch.
+ *
+ * The tree's browse position follows the folder filter: every way of changing
+ * the folder goes through setQuery, and refresh() re-reads it from there.
+ * Only ".." moves the browse position on its own, to look without filtering.
  */
 import { $, el, clear, count, yearRange } from './ui.js';
 import { api } from './api.js';
@@ -13,21 +17,43 @@ export function createFilters({ collectionInfo }) {
   const treeBox = $('folder-tree');
   const crumbs = $('folder-crumbs');
   let browsePrefix = '';
+  let treeToken = 0;
+  let facetToken = 0;
 
   // ── Folder tree ─────────────────────────────────────────────────────────
 
-  async function renderTree() {
+  async function renderTree(facetsReady) {
+    const token = ++treeToken;
+    treeBox.classList.add('stale');
+    const known = state.status ? state.status.sources : [];
+    if (!state.query.source_id && !browsePrefix && known.length > 1) {
+      // Folders belong to a collection, so with none picked the top level is the collections.
+      const facets = await (facetsReady || Promise.resolve(state.facets));
+      if (token !== treeToken) return;
+      const counts = new Map(((facets && facets.sources) || []).map(s => [s.id, s.count]));
+      renderCrumbs();
+      clear(treeBox).classList.remove('stale');
+      for (const source of known) {
+        treeBox.append(el('li', {}, [row(source.label || source.root, source.root, counts.get(source.id) || 0,
+          () => setQuery({ source_id: source.id, folder: '', folder_exact: false }))]));
+      }
+      return;
+    }
+
     const query = { ...state.query, folder: '', similar_to: null, vector: null, page: 0 };
     let data;
     try {
       data = await api.folders(query, browsePrefix);
     } catch {
-      clear(treeBox).append(el('li', { class: 'muted-row', text: 'Folder counts unavailable' }));
+      if (token !== treeToken) return;
+      clear(treeBox).classList.remove('stale');
+      treeBox.append(el('li', { class: 'muted-row', text: 'Folder counts unavailable' }));
       return;
     }
+    if (token !== treeToken) return;          // a newer refresh is on its way
 
     renderCrumbs();
-    clear(treeBox);
+    clear(treeBox).classList.remove('stale');
 
     if (browsePrefix) {
       treeBox.append(el('li', {}, [row('..', parentOf(browsePrefix), null, () => {
@@ -47,9 +73,7 @@ export function createFilters({ collectionInfo }) {
 
     for (const child of data.children) {
       treeBox.append(el('li', {}, [row(child.name, child.path, child.count, () => {
-        browsePrefix = child.path;
         setQuery({ folder: child.path, folder_exact: false });
-        renderTree();
       }, state.query.folder === child.path && !state.query.folder_exact)]));
     }
   }
@@ -68,9 +92,12 @@ export function createFilters({ collectionInfo }) {
 
   function renderCrumbs() {
     clear(crumbs);
+    const picked = state.query.source_id
+      ? (state.status?.sources || []).find(s => s.id === state.query.source_id) : null;
     crumbs.append(el('button', {
-      type: 'button', text: 'all',
-      onclick: () => { browsePrefix = ''; setQuery({ folder: '', folder_exact: false }); renderTree(); },
+      type: 'button', text: picked ? picked.label || picked.root : 'all',
+      title: picked ? 'Top of this collection' : 'All collections',
+      onclick: () => setQuery({ folder: '', folder_exact: false }),
     }));
     let accumulated = '';
     for (const segment of browsePrefix.split('/').filter(Boolean)) {
@@ -79,21 +106,28 @@ export function createFilters({ collectionInfo }) {
       crumbs.append(el('span', { text: '/' }));
       crumbs.append(el('button', {
         type: 'button', text: segment,
-        onclick: () => { browsePrefix = target; setQuery({ folder: target, folder_exact: false }); renderTree(); },
+        onclick: () => setQuery({ folder: target, folder_exact: false }),
       }));
     }
   }
 
   // ── Facets ──────────────────────────────────────────────────────────────
 
+  const facetBoxes = () => ['source-filter', 'facet-tags', 'facet-labels', 'quality-bands'].map($).filter(Boolean);
+
   async function renderFacets() {
+    const token = ++facetToken;
+    facetBoxes().forEach(box => box.classList.add('stale'));
     let data;
     try {
       data = await api.facets(state.query);
     } catch {
-      return;
+      if (token === facetToken) facetBoxes().forEach(box => box.classList.remove('stale'));
+      return null;
     }
+    if (token !== facetToken) return data;     // the tree may still use it; the rail waits for the newest
     state.facets = data;
+    facetBoxes().forEach(box => box.classList.remove('stale'));
 
     renderSources(data.sources || []);
     renderSurveyFacets(data);
@@ -128,6 +162,7 @@ export function createFilters({ collectionInfo }) {
         onclick: () => setQuery(rangeFor(key)),
       }, [el('b', { text: count(data.quality[key] || 0) }), text]));
     }
+    return data;
   }
 
   function renderSources(sources) {
@@ -209,16 +244,22 @@ export function createFilters({ collectionInfo }) {
 
   // ── Active filter chips ─────────────────────────────────────────────────
 
-  function renderChips() {
-    const box = clear($('active-filters'));
+  /** Every active filter as [text, remove, class]; the grid's empty state names them too. */
+  function chipList() {
     const chips = [];
     const q = state.query;
 
+    if (q.text) {
+      chips.push([`search: “${q.text}”${q.sort === 'relevance' ? ' · sorted by relevance' : ''}`,
+        () => setQuery({ text: '', sort: q.sort === 'relevance' ? 'quality' : q.sort }), 'search-chip']);
+    }
     if (q.similar_to) chips.push(['Similar to #' + q.similar_to, () => setQuery({ similar_to: null })]);
     if (q.vector) chips.push(['Similar to uploaded image', () => setQuery({ vector: null })]);
     if (q.source_id) {
       const source = (state.status?.sources || []).find(s => s.id === q.source_id);
-      chips.push([`collection: ${source ? source.label || source.root : q.source_id}`, () => setQuery({ source_id: null })]);
+      // Folders are relative to a collection, so leaving it leaves its folder too.
+      chips.push([`collection: ${source ? source.label || source.root : q.source_id}`,
+        () => setQuery({ source_id: null, folder: '', folder_exact: false })]);
     }
     if (q.year !== null && q.year !== undefined) chips.push([`year: ${q.year}`, () => setQuery({ year: null })]);
     if (q.survey) chips.push([`survey: ${q.survey}`, () => setQuery({ survey: '' })]);
@@ -231,9 +272,13 @@ export function createFilters({ collectionInfo }) {
     if (q.dedupe) chips.push(['deduped', () => setQuery({ dedupe: false })]);
     if (q.untagged) chips.push(['untagged only', () => setQuery({ untagged: false })]);
     if (q.unannotated) chips.push(['un-annotated only', () => setQuery({ unannotated: false })]);
+    return chips;
+  }
 
-    for (const [text, onRemove] of chips) {
-      box.append(el('span', { class: 'filter-chip' }, [
+  function renderChips() {
+    const box = clear($('active-filters'));
+    for (const [text, onRemove, extra] of chipList()) {
+      box.append(el('span', { class: `filter-chip${extra ? ` ${extra}` : ''}` }, [
         text, el('button', { type: 'button', text: '×', title: 'Remove', onclick: onRemove }),
       ]));
     }
@@ -262,15 +307,11 @@ export function createFilters({ collectionInfo }) {
     $('quality-min-val').textContent = '0';
     setQuery({ quality_min: null, quality_max: null });
   });
-  $('sources-reset').addEventListener('click', () => setQuery({ source_id: null }));
+  $('sources-reset').addEventListener('click', () => setQuery({ source_id: null, folder: '', folder_exact: false }));
   $('survey-reset').addEventListener('click', () => setQuery({ year: null, survey: '', region: '' }));
   $('tags-reset').addEventListener('click', () => setQuery({ tags: [], exclude_tags: [] }));
   $('labels-reset').addEventListener('click', () => setQuery({ labels: [] }));
-  $('folder-reset').addEventListener('click', () => {
-    browsePrefix = '';
-    setQuery({ folder: '', folder_exact: false });
-    renderTree();
-  });
+  $('folder-reset').addEventListener('click', () => setQuery({ folder: '', folder_exact: false }));
 
   function syncControls() {
     qualitySlider.value = state.query.quality_min ?? 0;
@@ -281,8 +322,12 @@ export function createFilters({ collectionInfo }) {
   }
 
   return {
-    refresh() { syncControls(); renderChips(); renderBanner(); renderTree(); renderFacets(); },
+    refresh() {
+      syncControls(); renderChips(); renderBanner();
+      browsePrefix = state.query.folder || '';
+      renderTree(renderFacets());
+    },
     renderChips,
-    setBrowsePrefix(prefix) { browsePrefix = prefix; renderTree(); },
+    chips: chipList,
   };
 }

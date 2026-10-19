@@ -9,7 +9,7 @@
 
 import { $, notice, renderStatusChips } from './ui.js';
 import { api } from './api.js';
-import { state, subscribe, setQuery, emit, clearSelection, clearVectorQuery } from './state.js';
+import { state, subscribe, setQuery, emit, clearSelection, clearVectorQuery, persistableQuery } from './state.js';
 import { createGrid } from './grid.js';
 import { createFilters } from './filters.js';
 import { createDetail } from './detail.js';
@@ -18,7 +18,7 @@ import { createDatasets } from './datasets.js';
 import { watchJob } from './jobs.js';
 
 const detail = createDetail();
-const grid = createGrid({ onOpen: id => detail.open(id) });
+const grid = createGrid({ onOpen: id => detail.open(id), activeFilters: () => filters.chips() });
 const collectionInfo = createCollectionInfo();
 const filters = createFilters({ collectionInfo });
 const datasets = createDatasets();
@@ -29,6 +29,7 @@ let searchToken = 0;
 
 async function runSearch() {
   const token = ++searchToken;
+  grid.setLoading(true);
   try {
     const results = await api.search(state.query);
     if (token !== searchToken) return;      // a newer search already landed
@@ -36,12 +37,56 @@ async function runSearch() {
     grid.render();
     if (results.note) notice(results.note);
   } catch (error) {
+    if (token === searchToken) grid.setLoading(false);
     notice(error.message, 'sticky');
   }
 }
 
+// ── URL: the filters live in the hash, so refresh, Back and a shared link keep them ──
+
+const DEFAULT_QUERY = JSON.stringify(persistableQuery());
+
+function readHash() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  let query = null;
+  try { query = params.has('q') ? JSON.parse(params.get('q')) : null; } catch { query = null; }
+  const asset = Number(params.get('asset'));
+  return { query: query && typeof query === 'object' ? query : null, asset: Number.isInteger(asset) && asset > 0 ? asset : null };
+}
+
+/** Only the keys that differ from a fresh page, so links stay short. */
+function writeHash() {
+  const defaults = JSON.parse(DEFAULT_QUERY);
+  const changed = Object.fromEntries(Object.entries(persistableQuery())
+    .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(defaults[key])));
+  if (state.query.page) changed.page = state.query.page;
+  const next = Object.keys(changed).length ? `#q=${encodeURIComponent(JSON.stringify(changed))}` : '';
+  if (window.location.hash !== next) history.replaceState(null, '', next || window.location.pathname + window.location.search);
+}
+
+function applyHashQuery(query) {
+  const defaults = JSON.parse(DEFAULT_QUERY);
+  const known = Object.fromEntries(Object.entries(query || {}).filter(([key]) => key in defaults || key === 'page'));
+  Object.assign(state.query, defaults, { page: 0, vector: null }, known);
+}
+
+/** The search bar shows the query it ran, whichever way the query was set. */
+function syncSearchBar() {
+  $('search-text').value = state.query.text || '';
+  $('search-mode').value = state.query.mode || 'auto';
+  $('sort-select').value = state.query.sort;
+}
+
+window.addEventListener('hashchange', () => {
+  const { query, asset } = readHash();
+  if (query) { applyHashQuery(query); emit('query'); }
+  if (asset) detail.open(asset);
+});
+
 subscribe(event => {
   if (event === 'query') {
+    syncSearchBar();
+    writeHash();
     runSearch();
     filters.refresh();
   } else if (event === 'selection') {
@@ -239,10 +284,16 @@ async function refreshStatus() {
 
 $('annotate-model').addEventListener('change', syncPromptField);
 
+const initial = readHash();
+if (initial.query) applyHashQuery(initial.query);
 $('sort-select').value = state.query.sort;
 renderSelection();
 loadModels();
-refreshStatus().then(() => emit('query'));
+refreshStatus().then(() => {
+  emit('query');
+  // A link from curation names one image; open it over its collection's grid.
+  if (initial.asset) detail.open(initial.asset);
+});
 
 // The "All" tab is current only while the Datasets drawer is closed.
 {

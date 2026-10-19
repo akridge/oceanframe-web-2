@@ -277,3 +277,33 @@ def test_every_page_has_the_same_main_navigation(client):
     assert set(orders.values()) == {("Library", "Curation", "Frame Analyser")}, orders
     assert re.search(r'aria-current="page"[^>]*>\s*<i[^>]*></i><span class="rail-label">Library<', client.get("/").text)
     assert 'id="open-datasets"' in client.get("/").text  # page-specific links survive
+
+
+def test_changing_the_path_rule_retags_existing_images(client, tree):
+    """The T3 class is a folder name; a rule saved after indexing must reach the images already there."""
+    from library import jobs
+
+    def tagged(tag):
+        return client.post("/api/library/search", json={"tags": [tag]}).json()["total"]
+
+    kaneohe = tagged("site:kaneohe")
+    assert kaneohe > 0
+    body = client.post("/api/library/sources", json={
+        "root": str(tree), "tag_pattern": r"(?P<year>\d{4})/(?P<place>[^/]+)/"}).json()
+    job = jobs.get_job(body["retag_job"]["id"])
+    for _ in jobs.stream(job, heartbeat=30):
+        pass
+    assert job.result == {"tagged": 5}
+    assert tagged("place:kaneohe") == kaneohe and tagged("site:kaneohe") == 0
+
+    # Re-indexing with metadata and another rule re-tags the unchanged images as well.
+    index = client.post("/api/library/index", json={
+        "root": str(tree), "tag_pattern": r"(?P<year>\d{4})/(?P<spot>[^/]+)/", "meta": {}}).json()
+    job = jobs.get_job(index["id"])
+    for _ in jobs.stream(job, heartbeat=30):
+        pass
+    assert tagged("spot:kaneohe") == kaneohe and tagged("place:kaneohe") == 0
+
+    # Saving the same rule again re-tags nothing.
+    again = client.post("/api/library/sources", json={"root": str(tree), "tag_pattern": r"(?P<year>\d{4})/(?P<spot>[^/]+)/"})
+    assert "retag_job" not in again.json()

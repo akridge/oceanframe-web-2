@@ -155,6 +155,30 @@ Folders are meaningful in survey data, so they are indexed, not just displayed:
   example `(?P<year>\d{4})/(?P<site>[^/]+)/(?P<transect>T\d+)` turns
   `2024/kaneohe/T03/img_0912.jpg` into `year:2024`, `site:kaneohe`,
   `transect:T03` — which are then facetable and searchable like any other tag.
+* Changing a collection's rule re-tags the images already indexed (a `retag`
+  job, or a step at the start of the next index run): their `origin='path'`
+  tags are recomputed from the stored folder and name, so nothing is downloaded
+  or re-embedded. The CoralNet T3 mirrors use
+  `(?:(?P<split>train|val|test)/)?(?P<class>[^/]+)/[^/]+$`, which turns the class
+  folder into a `class:` tag on both `pacific_all` and `pacific_t3_splits`.
+
+### 3.5a Navigation, loading feedback and links to curation
+
+* The folder tree follows the folder filter: picking a collection, removing a
+  chip or resetting always brings the tree back with it. With no collection
+  picked, the tree's top level is the collections themselves.
+* The filters live in the URL hash (`#q=<json>` with only what differs from a
+  fresh page), so a reload, Back or a shared link keeps them. `#asset=<id>`
+  opens one image's detail.
+* While a search runs the grid dims and the result count reads "Searching…";
+  facet and folder counts fade until theirs land. An empty result lists its
+  filters, with a button to remove the newest. Search text has its own chip,
+  which says when results are sorted by relevance.
+* An image that is a curation patch (its URI is one of the patch's crop
+  candidates, see `curation/images.py`) shows **Open in curation** for each
+  project; a curation patch the library has indexed shows **View in library**.
+  Endpoints: `GET /api/curation/library-links?uri=` and
+  `GET /api/curation/projects/{id}/items/{item}/library`.
 
 ### 3.6 Collection metadata & InPort
 
